@@ -1,0 +1,19 @@
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environments
+venv/
+.venv/
+
+# Editor settings
+.vscode/
+
+# OS files
+.DS_Store
+Thumbs.db
+test.ipynb
+fine_tune_S1234.ipynb
+session_name.session
