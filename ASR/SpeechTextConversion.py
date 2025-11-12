@@ -508,7 +508,7 @@ if __name__ == "__main__":
     # model = whisper.load_model("large-v3", download_root="/mnt/d/Personal/PromptSpeech/models")
     #wav_path = "/mnt/d/Personal/PromptSpeech/videosPerYear/2006/2006-09-22/2006-09-22.wav"
     folder_oneYear_path = "/mnt/d/Personal/PromptSpeech/videosPerYear"
-    diarization_pipeline = Pipeline.from_pretrained("pyannote/speaker-diarization-3.1" ,use_auth_token="***REMOVED***")
+    diarization_pipeline = Pipeline.from_pretrained("pyannote/speaker-diarization-3.1")
     diarization_pipeline.to(torch.device(device))
     asr_pipeline = pipeline("automatic-speech-recognition",
                               model="openai/whisper-large-v3",
