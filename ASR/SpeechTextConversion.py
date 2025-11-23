@@ -14,6 +14,13 @@ import re
 from jiwer import wer, cer
 from collections import Counter
 
+device = "cuda:0" if torch.cuda.is_available() else "cpu"
+torch.device(device)
+diarization_pipeline = Pipeline.from_pretrained("pyannote/speaker-diarization-3.1")
+diarization_pipeline.to(torch.device(device))
+asr_pipeline = pipeline("automatic-speech-recognition",
+                            model="openai/whisper-large-v3",
+                            device=device)
 def load_and_resample_wav(file_path, averagChannel=False, channelNumber=0,target_sr=16000):
     """
     Load a WAV file and resample it to the target sample rate.
@@ -177,7 +184,7 @@ def split_audio_by_diarization(wav_file, diarization_infoFile, output_dir="Audio
   
 
 
-def diarization_speech(wav_path, modelPipeline,nb_speakers=2,averagChannel=False, channelNumber=0):
+def diarization_speech(wav_path,nb_speakers=2,averagChannel=False, channelNumber=0):
      """
      perform speaker diarization of a speech file and save the results in json file
         Args:
@@ -191,9 +198,9 @@ def diarization_speech(wav_path, modelPipeline,nb_speakers=2,averagChannel=False
      audio_array, fs = load_and_resample_wav(wav_path, averagChannel=averagChannel, channelNumber=channelNumber,target_sr=16000)
      input_tensor = torch.from_numpy(audio_array[None, :]).float()
      if(nb_speakers!=-1):
-         outputs = modelPipeline({"waveform": input_tensor, "sample_rate": fs},num_speakers=nb_speakers)
+         outputs = diarization_pipeline({"waveform": input_tensor, "sample_rate": fs},num_speakers=nb_speakers)
      else:
-         outputs = modelPipeline({"waveform": input_tensor, "sample_rate": fs},min_speakers=1,max_speakers=3)
+         outputs = diarization_pipeline({"waveform": input_tensor, "sample_rate": fs},min_speakers=1,max_speakers=3)
      results = []
      
      for turn, _, speaker in outputs.itertracks(yield_label=True):
@@ -219,7 +226,7 @@ def natural_key(path):
     return [int(text) if text.isdigit() else text.lower()
             for text in re.split(r'(\d+)', path.stem)]
 
-def transcribe_directory(input_dir, pipelineModel,predictTimeStamp,averagChannel=False, channelNumber=0, addnameSpeaker=True):
+def transcribe_directory(input_dir,predictTimeStamp,averagChannel=False, channelNumber=0, addnameSpeaker=True):
     """
     Transcribe all .wav files in input_dir using a given Whisper pipeline and save results in a JSON file.
 
@@ -257,11 +264,11 @@ def transcribe_directory(input_dir, pipelineModel,predictTimeStamp,averagChannel
             "task": "transcribe",
             "language": "ar"
                 }
-            output = pipelineModel(audio_array,generate_kwargs=generate_kwargs,return_timestamps=temppredictTimeStamp)
+            output = asr_pipeline(audio_array,generate_kwargs=generate_kwargs,return_timestamps=temppredictTimeStamp)
         else:
             dict =  {"task": "transcribe", 
                     "language": "ar"}
-            output = pipelineModel(audio_array,generate_kwargs=dict,return_timestamps=temppredictTimeStamp)
+            output = asr_pipeline(audio_array,generate_kwargs=dict,return_timestamps=temppredictTimeStamp)
 
         if(addnameSpeaker):
             fullText.append(f"{segmentsInfo[i]['speaker']}: {output['text'].strip()}")
@@ -269,18 +276,7 @@ def transcribe_directory(input_dir, pipelineModel,predictTimeStamp,averagChannel
             fullText.append(output["text"].strip())
          # Store results
 
-        # if(temppredictTimeStamp):
-        #     results[wav_file.name] = {
-        #         "full_text": output["text"].strip(),
-        #         "segments": [
-        #             {
-        #                 "start": seg["timestamp"][0],
-        #                 "end": seg["timestamp"][1],
-        #                 "text": seg["text"].strip()
-        #             }
-        #             for seg in output["chunks"]
-        #         ]
-        #     }
+      
             
         # else:
         results[wav_file.name] = {
@@ -293,20 +289,21 @@ def transcribe_directory(input_dir, pipelineModel,predictTimeStamp,averagChannel
     fullText = "\n\n".join(fullText)
     print("Transcription completed.")
     # Save results as JSON in same directory
-    transcription_dir = os.path.join(input_dir, "Transcription")
+    parentDir = os.path.dirname(input_dir)
+    transcription_dir = os.path.join(parentDir, "Transcription")
     os.makedirs(transcription_dir, exist_ok=True)
-    json_path = os.path.join(transcription_dir, "transcription_whisper_large_v3.json")
-    with open(json_path, "w", encoding="utf-8") as f:
+    transcriptionChunk_path = os.path.join(transcription_dir, "transcription_whisper_large_v3.json")
+    with open(transcriptionChunk_path, "w", encoding="utf-8") as f:
         json.dump(results, f, ensure_ascii=False, indent=4)
      # Save full text in same directory
-    full_result_path = os.path.join(transcription_dir, "transcription_full_text.txt")
-    with open(full_result_path, "w", encoding="utf-8") as f:
+    textTranscription_path = os.path.join(transcription_dir, "transcription_full_text.txt")
+    with open(textTranscription_path, "w", encoding="utf-8") as f:
         f.write(fullText)
 
-    print(f"Results saved to {json_path}")
-    return full_result_path
+    print(f"Transcription Chunks saved to {transcriptionChunk_path}")
+    return textTranscription_path, transcriptionChunk_path
 
-def transcribe_One_Speech(wav_path,diarization_pipeline, ASR_Pipeline,configuration):
+def transcribe_One_Speech(wav_path,configuration):
     """
     Transcribe a single speech file using diarization and ASR pipelines.
     Args:
@@ -321,7 +318,7 @@ def transcribe_One_Speech(wav_path,diarization_pipeline, ASR_Pipeline,configurat
     nb_speakers = configuration["nb_speakers"]
     # Step 1: Diarization
     print("Starting diarization...")
-    outputDiarizationPath = diarization_speech(wav_path, diarization_pipeline,nb_speakers=nb_speakers,
+    outputDiarizationPath = diarization_speech(wav_path,nb_speakers=nb_speakers,
                                                averagChannel=averChannel, channelNumber=channelNumber)
     if(outputDiarizationPath is None):
        print(f"Diarization failed of wave in {wav_path}.")
@@ -337,12 +334,12 @@ def transcribe_One_Speech(wav_path,diarization_pipeline, ASR_Pipeline,configurat
                                                    skip_silence=skip_silence)
     print("Starting transcription...")
     # Step 3: Transcribe each segment using Whisper model
-    full_transcribptionPath = transcribe_directory(OutputSegmentPath, ASR_Pipeline,predictTimeStamp,
+    textTranscription_path, transcriptionChunk_path = transcribe_directory(OutputSegmentPath,predictTimeStamp,
                                                    averagChannel=averChannel, channelNumber=channelNumber,
                                                    addnameSpeaker=configuration["addnameSpeaker"])
-    return
+    return textTranscription_path, transcriptionChunk_path
 
-def transcribe_OneYearFolder(input_folder_path,diarization_pipeline, ASR_Pipeline,configuration):
+def transcribe_OneYearFolder(input_folder_path,configuration):
     """
     Process the first .wav file in each subfolder of the given input folder path.
     Calls transcribe_One_Speech on the first .wav file found in each subfolder
@@ -382,10 +379,10 @@ def transcribe_OneYearFolder(input_folder_path,diarization_pipeline, ASR_Pipelin
             if wav_files:
                 print(f"Processing folder: {folder_name}") 
                 wav_path = os.path.join(folder_path, wav_files[0])
-                transcribe_One_Speech(wav_path,diarization_pipeline, ASR_Pipeline,configuration)
+                textTranscription_path, transcriptionChunk_path = transcribe_One_Speech(wav_path,configuration)
 
 
-def transcribe_all_subfolders(input_path, diarization_pipeline, ASR_Pipeline,configuration):
+def transcribe_all_subfolders(input_path,configuration):
     """
     Process all immediate subfolders of the given input path.
     Calls transcribe_OneYearFolder on each subfolder.
@@ -408,7 +405,7 @@ def transcribe_all_subfolders(input_path, diarization_pipeline, ASR_Pipeline,con
         if os.path.isdir(folder_path):
             print(f"Processing subfolder: {folder_name}  {i}/ {len(os.listdir(folder_path))} files")
             # Call the existing function on this folder
-            transcribe_OneYearFolder(folder_path, diarization_pipeline, ASR_Pipeline,configuration)
+            transcribe_OneYearFolder(folder_path, diarization_pipeline, asr_pipeline,configuration)
 
 def rename_speakers(json_path):
     """
