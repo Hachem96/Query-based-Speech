@@ -333,7 +333,35 @@ def getSegmentTopK(TopKChunks,chunkIndex,scores,oneHole):
     return selectedChunks, avgScore/len(selectedChunks) 
 
 
+def getAnswerSegements(new_Fullanswer):
+    """
+    Splits the new_Fullanswer list into segments of consecutive numbers.
+    Input:
+        new_Fullanswer: List of new chunk indices.
+    Output:
+        segments: List of lists, each containing a segment of consecutive numbers.
+    """
+    segments = []
+    
+    current_segment = []
+   
+    current_segment.append(new_Fullanswer[0])
+    
+    for i in range(1,len(new_Fullanswer)):
+        if new_Fullanswer[i] == new_Fullanswer[i - 1] + 1:
+            current_segment.append(new_Fullanswer[i])
+            
 
+        else:
+            segments.append(current_segment)
+            
+            current_segment = [new_Fullanswer[i]]
+           
+    if current_segment:
+        segments.append(current_segment)
+        
+
+    return len(segments),segments
 if __name__ == "__main__":
    
     #device = torch.device('cuda')
