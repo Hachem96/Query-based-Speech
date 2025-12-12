@@ -1,24 +1,35 @@
 
-from embedding.embeddingScript import embed_query
-from Database.searchinDatabase import get_table_from_db,compute_similarities
-from Database.DataBaseFunctions import connectTodatabase
+import os
+import psycopg2
+from backend.embedding import embed_query
+from backend.searchinDatabase import get_table_from_db,compute_similarities
 import numpy as np
 import pandas as pd
-from moviepy import VideoFileClip
-configuration_db = {"db_name": "SpeechDatabaseInfo",
-                     "password": "root",
-                     "host": "localhost",
-                      "port": 5433 }
-topK = 20
+#from moviepy import VideoFileClip
+
+topK = 25
 oneHole = True
 startIdx = 0
+
+def connectTodatabase():
+    connection = psycopg2.connect(
+        dbname=os.getenv("DB_NAME"),
+        user="postgres",
+        password=os.getenv("DB_PASSWORD"),
+        host=os.getenv("DB_HOST"),
+        port=int(os.getenv("DB_PORT"))
+        )
+    connection.autocommit = True
+    cursor = connection.cursor()
+    return connection, cursor
+    
 def inference_query(query,videoName):
     """
     function returns the start end time stamp represents the answer of query in videoName
     """
     # first step: embedd query
     embeddingQuery = embed_query(query)
-    connction, cursor = connectTodatabase(configuration_db)
+    connection, cursor = connectTodatabase()
 
     # get information of videoName
     Table_Name = "Video"
@@ -31,7 +42,7 @@ def inference_query(query,videoName):
     # compute the similaritie between the query and merged chunks of video
     mergedChunkSimilarities = compute_similarities(cursor,videoId, embeddingQuery)
     
-    mergedChunkSimilarities["Scores"] = mergedChunkSimilarities["jinaV3"] +  mergedChunkSimilarities["omarelshehy"] + mergedChunkSimilarities["Qwen-0.6B"]
+    mergedChunkSimilarities["Scores"] = mergedChunkSimilarities["Qwen-0.6B"] #""]
 
     # sorte the chunks
     mergedChunkSimilarities = mergedChunkSimilarities.sort_values("Scores", ascending=True).reset_index(drop=True)
@@ -121,27 +132,27 @@ def getSegmentTopK(TopKChunks,chunkIndex,oneHole):
     return selectedChunks
 
 
-def trim_and_show_video(video_path, start_time, end_time):
-    """
-    Trim and preview a segment of a video.
+# def trim_and_show_video(video_path, start_time, end_time):
+#     """
+#     Trim and preview a segment of a video.
 
-    :param video_path: Path to the mp4 file
-    :param start_time: Start timestamp (seconds or 'HH:MM:SS')
-    :param end_time: End timestamp (seconds or 'HH:MM:SS')
-    """
+#     :param video_path: Path to the mp4 file
+#     :param start_time: Start timestamp (seconds or 'HH:MM:SS')
+#     :param end_time: End timestamp (seconds or 'HH:MM:SS')
+#     """
 
-    # Load the video
-    clip = VideoFileClip(video_path)
+#     # Load the video
+#     clip = VideoFileClip(video_path)
 
-    # Trim video
-    trimmed = clip.subclipped(start_time, end_time)
+#     # Trim video
+#     trimmed = clip.subclipped(start_time, end_time)
 
-    # Preview the trimmed video
-    trimmed.preview()
+#     # Preview the trimmed video
+#     trimmed.preview()
 
-    # Close clips to free memory
-    trimmed.close()
-    clip.close()
+#     # Close clips to free memory
+#     trimmed.close()
+#     clip.close()
 if __name__ == "__main__":
     # create_database()
     videoName = "2005-04-25"
@@ -150,6 +161,6 @@ if __name__ == "__main__":
     output = inference_query(query,videoName)
     start = int(output["startTimeStamp"])
     end = int(output["endTimeStamp"])
-    trim_and_show_video(videoPath,start,end)
+    #trim_and_show_video(videoPath,start,end)
     print(output)
     

@@ -1,12 +1,24 @@
 
-from Database.DataBaseFunctions import connectTodatabase
+import psycopg2
 import pandas as pd
+import os
+def connectTodatabase():
+    connection = psycopg2.connect(
+        dbname=os.getenv("DB_NAME"),
+        user="postgres",
+        password=os.getenv("DB_PASSWORD"),
+        host=os.getenv("DB_HOST"),
+        port=int(os.getenv("DB_PORT"))
+        )
+    connection.autocommit = True
+    cursor = connection.cursor()
+    return connection, cursor
 
-def getVideoInfo(videoName,configuration):
+def getVideoInfo(cursor,videoName):
     """
     function returns the information of a video from the Video table in database
     """
-    connction, cursor = connectTodatabase(configuration)
+  
 
     query = 'SELECT * FROM "Video" WHERE name = %s LIMIT 1;'
     cursor.execute(query, (videoName,))
@@ -19,7 +31,7 @@ def getVideoInfo(videoName,configuration):
         print(f"{videoName} does not exist in database")
 
 
-def compute_similarities(cursor,video_id, queryVectors):
+def compute_similarities(cursor, video_id, queryVectors):
     """
     function computes similarities vectors beween the embedding of chunk
     and the embeddings of the chunks of one video 
@@ -36,15 +48,15 @@ def compute_similarities(cursor,video_id, queryVectors):
     query = '''
             SELECT
                 "mergedChunkId",
-                ("jinaV3" <#> %s::vector) AS "jinaV3",
-                (omarelshehy <#> %s::vector) AS omarelshehy,
                 ("Qwen-0.6B" <#> %s::vector) AS "Qwen-0.6B"
             FROM "Embeddings"
             WHERE "videoId" = %s;
         '''
 
-    # pass the same vector 3 times + video_id
-    cursor.execute(query, (queryVectors[0], queryVectors[1], queryVectors[2], video_id))
+    
+    
+    python_vector = queryVectors.astype(float).tolist()
+    cursor.execute(query, (python_vector, video_id))
     rows = cursor.fetchall()
     columns = [desc[0] for desc in cursor.description]
 
@@ -52,7 +64,7 @@ def compute_similarities(cursor,video_id, queryVectors):
     df = pd.DataFrame(rows, columns=columns)
     return df
 
-def get_table_from_db(cursor, Table_Name, list_columns, filter_conditions=None):
+def get_table_from_db(cursor,Table_Name, list_columns, filter_conditions=None):
     """
     Fetch data from a database table based on a list of columns and optional filter conditions.
 
@@ -66,6 +78,9 @@ def get_table_from_db(cursor, Table_Name, list_columns, filter_conditions=None):
     - Pandas DataFrame containing the requested data.
     """
     # Convert the list of columns into a properly formatted SQL string
+    if(cursor ==None):
+        connection, cursor = connectTodatabase()
+        
     columns_str = ', '.join(f'"{col}"' for col in list_columns)
 
     # Base query

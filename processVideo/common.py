@@ -3,6 +3,7 @@ from PIL import Image, ImageDraw, ImageFont
 import textwrap
 from moviepy import VideoFileClip
 import json
+
 font_path = "/mnt/d/Personal/PromptSpeech/Amiri/Amiri-Bold.ttf"
 
 def text_file_to_image(output_path, captionText, captionPath=None, font_size=48, image_size=(800, 600)):
@@ -39,9 +40,16 @@ def text_file_to_image(output_path, captionText, captionPath=None, font_size=48,
         font = ImageFont.load_default()
 
     # Wrap text to fit width
-    wrapper = textwrap.TextWrapper(width=50)
-    wrapped_text = "\n".join(wrapper.wrap(text))
 
+    wrapper = textwrap.TextWrapper(width=50)
+    lines = text.split("\n")
+    #wrapped_text = "\n".join(wrapper.wrap(text))
+    wrapped_lines = []
+    for line in lines:
+        wrapped_lines.extend(wrapper.wrap(line) or [""])
+
+    # Join with newline so each wrapped line is drawn separately
+    wrapped_text = "\n".join(wrapped_lines)
     # Measure text size
     text_bbox = draw.multiline_textbbox((0, 0), wrapped_text, font=font, align="center")
     text_width = text_bbox[2] - text_bbox[0]

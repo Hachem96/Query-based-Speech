@@ -1,11 +1,12 @@
 
+import os
 import psycopg2
 from psycopg2 import sql
 from psycopg2.extras import Json
 from pgvector.psycopg2 import register_vector
 from pgvector import Vector
 
-def create_database(configuration):
+def create_database():
     """
     function to create a database and add the pgvector extenstion to the database
     configuration: dictionary contains connection info (database name, port, password and host)
@@ -19,13 +20,13 @@ def create_database(configuration):
         connection = psycopg2.connect(
             dbname="postgres",   # <-- connect to existing database
             user="postgres",
-            password=configuration["password"],
-            host=configuration["host"],
-            port=configuration["port"]
+            password=os.getenv("DB_PASSWORD"),
+            host=os.getenv("DB_HOST"),
+            port=os.getenv("DB_PORT")
         )
         connection.autocommit = True
         cursor = connection.cursor()
-        db_name = configuration["db_name"]
+        db_name = os.getenv("DB_NAME")
         # Create the new database
         cursor.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(db_name)))
         print(f"Database '{db_name}' was created successfully!")
@@ -37,9 +38,9 @@ def create_database(configuration):
         new_conn = psycopg2.connect(
             dbname=db_name,
             user="postgres",
-            password=configuration["password"],
-            host=configuration["host"],
-            port=configuration["port"]
+            password=os.getenv("DB_PASSWORD"),
+            host=os.getenv("DB_HOST"),
+            port=os.getenv("DB_PORT")
         )
         new_conn.autocommit = True
         new_cursor = new_conn.cursor()
@@ -59,20 +60,20 @@ def create_database(configuration):
   
             connection.close()
 
-def connectTodatabase(configuration):
+def connectTodatabase():
     connection = psycopg2.connect(
-        dbname=configuration["db_name"],
+        dbname=os.getenv("DB_NAME"),
         user="postgres",
-        password=configuration["password"],
-        host=configuration["host"],
-        port=configuration["port"]
+        password=os.getenv("DB_PASSWORD"),
+        host=os.getenv("DB_HOST"),
+        port=os.getenv("DB_PORT")
         )
     connection.autocommit = True
     cursor = connection.cursor()
     return connection, cursor
 
 
-def create_table(configuration,table_name,columnsInfo):
+def create_table(table_name,columnsInfo):
     """
     function to create a table in database
     configuration: connection info to the database
@@ -89,7 +90,7 @@ def create_table(configuration,table_name,columnsInfo):
     #columns = [col.strip() for col in columns_input.split(",") if col.strip()]
     
     try:
-        connection, cursor = connectTodatabase(configuration)
+        connection, cursor = connectTodatabase()
 
         column_defs =  [sql.SQL("{} SERIAL PRIMARY KEY").format(sql.Identifier("id"))]
 
@@ -128,8 +129,8 @@ def create_table(configuration,table_name,columnsInfo):
     except Exception as e:
             print("Error while creating the table:", e)
 
-def videoIsExist(configuration,videoName):
-    connection, cursor = connectTodatabase(configuration)
+def videoIsExist(videoName):
+    connection, cursor = connectTodatabase()
     check_query = 'SELECT 1 FROM "Video" WHERE name = %s LIMIT 1;'
     cursor.execute(check_query, (videoName,))
     exists = cursor.fetchone()
@@ -140,7 +141,7 @@ def videoIsExist(configuration,videoName):
         return False
    
 
-def add_row(configuration,table_name,columnValues):
+def add_row(table_name,columnValues):
     """
     function to add a row to a database
     Input
@@ -155,7 +156,7 @@ def add_row(configuration,table_name,columnValues):
 
    
     try:
-        connection, cursor = connectTodatabase(configuration)
+        connection, cursor = connectTodatabase()
 
         register_vector(connection)
 
@@ -200,7 +201,7 @@ def add_row(configuration,table_name,columnValues):
 
     
         
-def delete_row(configuration,table_name,columnCondition):
+def delete_row(table_name,columnCondition):
     """
     function to deete a row to a database
     Input
@@ -218,7 +219,7 @@ def delete_row(configuration,table_name,columnCondition):
     value = columnCondition["value"]
 
     try:
-        connection, cursor = connectTodatabase(configuration)
+        connection, cursor = connectTodatabase()
 
         delete_query = sql.SQL("DELETE FROM {} WHERE {} = %s").format(
         sql.Identifier(table_name),
@@ -242,7 +243,7 @@ def delete_row(configuration,table_name,columnCondition):
         if 'connection' in locals():
             connection.close()
 
-def update_value(configuration,table_name,filterColumn,targetColumn):
+def update_value(table_name,filterColumn,targetColumn):
     """
     function to change the value of a column in a given row 
     Input
@@ -262,7 +263,7 @@ def update_value(configuration,table_name,filterColumn,targetColumn):
     new_val = targetColumn["value"]
 
     try:
-        connection, cursor = connectTodatabase(configuration)
+        connection, cursor = connectTodatabase()
 
         update_query = sql.SQL("UPDATE {} SET {} = %s WHERE {} = %s").format(
         sql.Identifier(table_name),
@@ -287,7 +288,7 @@ def update_value(configuration,table_name,filterColumn,targetColumn):
         if 'connection' in locals():
             connection.close()
 
-def add_column(configuration,table_name,column_name,column_type):
+def add_column(table_name,column_name,column_type):
     """
     function to add a column to a table in datatabase
     """
@@ -296,7 +297,7 @@ def add_column(configuration,table_name,column_name,column_type):
    
 
     try:
-        connection, cursor = connectTodatabase(configuration)
+        connection, cursor = connectTodatabase()
 
         add_column_query = sql.SQL("ALTER TABLE {} ADD COLUMN {} TEXT").format(
         sql.Identifier(table_name),
@@ -320,14 +321,14 @@ def add_column(configuration,table_name,column_name,column_type):
         if 'connection' in locals():
             connection.close()
 
-def delete_column(configuration,table_name,columnName):
+def delete_column(table_name,columnName):
 
     print(f"Delete {columnName} Column from {table_name} Table")
 
    
 
     try:
-        connection, cursor = connectTodatabase(configuration)
+        connection, cursor = connectTodatabase()
 
         query = sql.SQL("ALTER TABLE {} DROP COLUMN IF EXISTS {}").format(
             sql.Identifier(table_name), sql.Identifier(columnName)
@@ -344,7 +345,7 @@ def delete_column(configuration,table_name,columnName):
         if 'connection' in locals():
             connection.close()
 
-def creat_db_tables(configuration):
+def creat_db_tables():
     """
     function to create the four tables in the database of project
         confiuration: conneciton info to the database
@@ -362,13 +363,14 @@ def creat_db_tables(configuration):
     "linkToMP4": "TEXT",
     "linkToMP3": "TEXT",
     "fullTranscriptionPath": "TEXT",
-    "pdfContent": "TEXT",          # raw text extracted from PDF
     "linkToPdf": "TEXT",
-    "summary": "TEXT",
-    "linToSummaryPdf": "TEXT"
+    "linkToSummaryPdf": "TEXT",
+    "correctedTranscriptionPath": "TEXT",
+    "linkToTranslation": "TEXT"
 }
+   
     table_name = "Video"
-    create_table(configuration,table_name,videoColumnsInfo)
+    create_table(table_name,videoColumnsInfo)
 
     # create initial chunk table
     chunkColumnsInfo = {
@@ -382,7 +384,7 @@ def creat_db_tables(configuration):
 }
 
     table_name = "InitialChunks"
-    create_table(configuration,table_name,chunkColumnsInfo)
+    create_table(table_name,chunkColumnsInfo)
 
     # create merged chunk table
     mergedChunkColumnsInfo = {
@@ -395,28 +397,34 @@ def creat_db_tables(configuration):
     "speaker": "TEXT"
 }
     table_name = "MergedChunks"
-    create_table(configuration,table_name,mergedChunkColumnsInfo)
+    create_table(table_name,mergedChunkColumnsInfo)
 
     # 
     embeddingTableInfo = {
         "mergedChunkId": ("INTEGER", "MergedChunks", "id"),
         "videoId": ("INTEGER", "Video", "id"),
-        "jinaV3": "vector(1024)",
-        "omarelshehy": "vector(768)",
         "Qwen-0.6B": "vector(1024)" 
     }
     table_name = "Embeddings"
-    create_table(configuration,table_name,embeddingTableInfo)
-
+    create_table(table_name,embeddingTableInfo)
+    # 
+    # add book table
+    bookTableInfo = {
+        "Title": "TEXT",
+        "linkToPdf": "TEXT",
+        "linkToCover": "TEXT",
+        "caption": "TEXT",
+        "Author": "TEXT",
+        "Year": "INTEGER"
+    }
+    table_name = "Book"
+    create_table(table_name,bookTableInfo)
     return
 if __name__ == "__main__":
     #create_database()
-    configuration = {"db_name": "SpeechDatabaseInfo",
-                     "password": "root",
-                     "host": "localhost",
-                      "port": 5433 }
-    create_database(configuration)
-    creat_db_tables(configuration)
+    
+    create_database()
+    creat_db_tables()
    
     table_name = "Video"
     column_name = "Summary"
