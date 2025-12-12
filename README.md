@@ -1,4 +1,4 @@
-# Es2al Sayed (PromptSpeech)
+# Query-based Speech Retrieval
 
 Query-based Speech Retrieval is an interactive learning platform designed to make video and book content accessible and searchable. It leverages AI to provide transcription, summarization, translation, and question-answering capabilities for your media library.
 
