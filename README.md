@@ -73,3 +73,138 @@ The best model in the YouTube evaluation was:
 
 ```text
 ivrit_ai_whisper_large_v3
+## YouTube Evaluation Conclusion
+
+The best model in the YouTube evaluation was `ivrit_ai_whisper_large_v3`.
+
+It achieved the lowest WER and CER.
+
+The `ivrit.ai` models were the strongest models overall in the YouTube evaluation.
+
+`Caspi-1.7B` worked successfully and performed better than the OpenAI Whisper models in WER, but it was still weaker than the `ivrit.ai` models.
+
+---
+
+## General Conclusions
+
+The strongest model overall was usually the Hebrew-specific `ivrit.ai` model.
+
+It performed best on:
+
+* SASpeech
+* YouTube Hebrew video evaluation
+* Dataset 1 WER
+
+`Caspi-1.7B` also performed well, especially in character-level accuracy on Dataset 1.
+
+`Whisper large-v3` was a good general model, but it was not the best model for Hebrew in these experiments.
+
+`SeamlessM4T` was tested, but it was weaker than the Hebrew-specific models in the SASpeech experiment.
+
+---
+
+## Important Observations
+
+Dataset quality strongly affected the results.
+
+Clean studio audio gave better scores, while real-world audio produced worse results because of noise, interruptions, overlapping speech, informal speech, slang, and microphone quality.
+
+Hebrew-specific models performed better than general multilingual models, especially the `ivrit.ai` models.
+
+---
+
+## How to Use
+
+### 1. Clone the repository
+
+```bash
+git clone https://github.com/mhmddirany/Video-Transcription-Hebrew-ASR-Pipeline.git
+cd Video-Transcription-Hebrew-ASR-Pipeline
+```
+
+### 2. Install requirements
+
+```bash
+pip install -r requirements.txt
+```
+
+In Google Colab, most required libraries are installed automatically inside the notebooks.
+
+### 3. Add Hugging Face Token
+
+Some models require a Hugging Face token.
+
+In Colab, add the token in **Colab Secrets** using the name:
+
+```text
+HF_TOKEN
+```
+
+Do not write the token directly inside the notebook.
+
+### 4. Run the Transcription Notebook
+
+Open:
+
+```text
+notebooks/video_transcription_pipeline.ipynb
+```
+
+Set the video path:
+
+```python
+MP4_PATH = "/content/drive/MyDrive/hebrew/video.mp4"
+```
+
+Set the output folder:
+
+```python
+OUTPUT_DIR = "/content/drive/MyDrive/output"
+```
+
+Then run the notebook cells from top to bottom.
+
+### 5. Run the Evaluation Notebooks
+
+Open one of the evaluation notebooks:
+
+```text
+notebooks/dataset1_transcription_model_evaluation.ipynb
+notebooks/dataset2_transcription_model_evaluation.ipynb
+notebooks/youtube_hebrew_transcription_model_evaluation.ipynb
+```
+
+---
+
+## Output Files
+
+The project can generate several output files.
+
+### Transcript Outputs
+
+* `.json`
+* `.pdf`
+
+### Evaluation Outputs
+
+* `.csv`
+* `.xlsx`
+
+Example output files:
+
+```text
+SUMMARY_WER_CER.csv
+SUMMARY_WER_CER.xlsx
+ALL_MODEL_RESULTS.csv
+ALL_MODEL_RESULTS.xlsx
+```
+
+---
+
+## Notes
+
+* Video files are not uploaded to GitHub.
+* Hugging Face tokens are not saved in the notebooks.
+* Large output files should not be committed unless needed.
+* The notebooks are designed mainly for Google Colab.
+* Results may change depending on GPU, package versions, preprocessing, and text normalization.
