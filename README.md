@@ -67,12 +67,7 @@ The use of three datasets helped compare model performance on both cleaner audio
 
 ---
 
-## Results Summary
 
-The best model in the YouTube evaluation was:
-
-```text
-ivrit_ai_whisper_large_v3
 ## YouTube Evaluation Conclusion
 
 The best model in the YouTube evaluation was `ivrit_ai_whisper_large_v3`.
