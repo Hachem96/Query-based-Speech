@@ -10,6 +10,10 @@ from psycopg2.extras import RealDictCursor
 # columns are stored relative to it (see frontend/app.py:convert_to_media_url).
 MAIN_MEDIA_PATH = os.getenv("MAIN_MEDIA_PATH", "")
 
+# When set (e.g. an R2 public/custom domain), media URLs point there instead
+# of the local ``/media`` proxy, so video/PDF bytes never touch this box.
+MEDIA_BASE_URL = os.getenv("MEDIA_BASE_URL", "").rstrip("/")
+
 _NOT_AVAILABLE = {None, "", "Not Available", "nan", "None"}
 
 
@@ -49,4 +53,6 @@ def to_media_url(db_path):
     else:
         rel = db_path
     rel = rel.lstrip("/\\").replace("\\", "/")
+    if MEDIA_BASE_URL:
+        return f"{MEDIA_BASE_URL}/{rel}"
     return f"/media/{rel}"

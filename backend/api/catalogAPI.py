@@ -2,8 +2,9 @@
 Read-only catalog endpoints for the web frontend: videos, books, and the
 available filter options. All file-path columns are returned as ``/media`` URLs.
 """
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from backend.api.db import query_all, to_media_url
+from backend.api.limiter import limiter
 
 router = APIRouter()
 
@@ -42,7 +43,8 @@ def _shape_book(row):
 
 
 @router.get("/videos")
-def list_videos(subject: str | None = None, year: int | None = None):
+@limiter.limit("60/minute")
+def list_videos(request: Request, subject: str | None = None, year: int | None = None):
     cols = ", ".join(f'"{c}"' for c in _VIDEO_COLUMNS)
     sql = f'SELECT {cols} FROM "Video" WHERE 1=1'
     params = []
@@ -57,7 +59,8 @@ def list_videos(subject: str | None = None, year: int | None = None):
 
 
 @router.get("/videos/{video_id}")
-def get_video(video_id: int):
+@limiter.limit("60/minute")
+def get_video(request: Request, video_id: int):
     cols = ", ".join(f'"{c}"' for c in _VIDEO_COLUMNS)
     rows = query_all(f'SELECT {cols} FROM "Video" WHERE id = %s', [video_id])
     if not rows:
@@ -66,13 +69,15 @@ def get_video(video_id: int):
 
 
 @router.get("/books")
-def list_books():
+@limiter.limit("60/minute")
+def list_books(request: Request):
     cols = ", ".join(f'"{c}"' for c in _BOOK_COLUMNS)
     return [_shape_book(r) for r in query_all(f'SELECT {cols} FROM "Book" ORDER BY "Title"')]
 
 
 @router.get("/books/{book_id}")
-def get_book(book_id: int):
+@limiter.limit("60/minute")
+def get_book(request: Request, book_id: int):
     cols = ", ".join(f'"{c}"' for c in _BOOK_COLUMNS)
     rows = query_all(f'SELECT {cols} FROM "Book" WHERE id = %s', [book_id])
     if not rows:
@@ -81,7 +86,8 @@ def get_book(book_id: int):
 
 
 @router.get("/filters")
-def filter_options():
+@limiter.limit("60/minute")
+def filter_options(request: Request):
     subjects = query_all(
         'SELECT DISTINCT subject FROM "Video" WHERE subject IS NOT NULL AND subject <> \'\' ORDER BY subject'
     )
