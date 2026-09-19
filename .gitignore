@@ -17,3 +17,8 @@ Thumbs.db
 test.ipynb
 fine_tune_S1234.ipynb
 session_name.session
+
+# Deployment docs/secrets - not for the repo
+ENV_VARS.md
+.env.production
+.env.production.*
