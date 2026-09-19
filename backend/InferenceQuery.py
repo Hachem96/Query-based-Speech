@@ -11,6 +11,11 @@ topK = 25
 oneHole = True
 startIdx = 0
 
+class VideoNotFoundError(Exception):
+    def __init__(self, videoName):
+        super().__init__(f"Video '{videoName}' not found")
+        self.videoName = videoName
+
 def connectTodatabase():
     connection = psycopg2.connect(
         dbname=os.getenv("DB_NAME"),
@@ -30,71 +35,75 @@ def inference_query(query,videoName):
     # first step: embedd query
     embeddingQuery = embed_query(query)
     connection, cursor = connectTodatabase()
+    try:
+        # get information of videoName
+        Table_Name = "Video"
+        list_columns = ["id","name","year"]
+        filter_condition = {"name": [videoName]}
+        videoInfo = get_table_from_db(cursor, Table_Name, list_columns, filter_conditions=filter_condition)
+        if videoInfo.empty:
+            raise VideoNotFoundError(videoName)
+        videoId = videoInfo["id"].loc[0]
+        videoId = int(videoId)
 
-    # get information of videoName
-    Table_Name = "Video"
-    list_columns = ["id","name","year"]
-    filter_condition = {"name": [videoName]}
-    videoInfo = get_table_from_db(cursor, Table_Name, list_columns, filter_conditions=filter_condition)
-    videoId = videoInfo["id"].loc[0]
-    videoId = int(videoId)
-    
-    # compute the similaritie between the query and merged chunks of video
-    mergedChunkSimilarities = compute_similarities(cursor,videoId, embeddingQuery)
-    
-    mergedChunkSimilarities["Scores"] = mergedChunkSimilarities["Qwen-0.6B"] #""]
+        # compute the similaritie between the query and merged chunks of video
+        mergedChunkSimilarities = compute_similarities(cursor,videoId, embeddingQuery)
 
-    # sorte the chunks
-    mergedChunkSimilarities = mergedChunkSimilarities.sort_values("Scores", ascending=True).reset_index(drop=True)
-    if(len(mergedChunkSimilarities)>topK):
-        topMergedChunkIds = mergedChunkSimilarities["mergedChunkId"].iloc[:topK].values
-    else:
-        topMergedChunkIds = mergedChunkSimilarities["mergedChunkId"].values
-    
-    topMergedChunkIds = topMergedChunkIds.tolist()
-    
-    # get topk merged chunks info using their ids
-    Table_Name = "MergedChunks"
-    list_columns = ["id","number","InitialChunkNumber","speaker"]
-    filter_condition ={"id": topMergedChunkIds}
-    mergedChunkInfo = get_table_from_db(cursor, Table_Name, list_columns, filter_conditions=filter_condition)
+        mergedChunkSimilarities["Scores"] = mergedChunkSimilarities["Qwen-0.6B"] #""]
 
-    # reorder merged chunk info in the same order of ids in topMergedChunkIds
-    mergedChunkInfo["__order__"] = mergedChunkInfo["id"].apply(lambda x: topMergedChunkIds.index(x))
-    mergedChunkInfo= mergedChunkInfo.sort_values("__order__").drop(columns="__order__").reset_index(drop=True)
+        # sorte the chunks
+        mergedChunkSimilarities = mergedChunkSimilarities.sort_values("Scores", ascending=True).reset_index(drop=True)
+        if(len(mergedChunkSimilarities)>topK):
+            topMergedChunkIds = mergedChunkSimilarities["mergedChunkId"].iloc[:topK].values
+        else:
+            topMergedChunkIds = mergedChunkSimilarities["mergedChunkId"].values
 
-    # get the chunk numbers of topk merged chunk
-    topMergedChunkNumbers =  mergedChunkInfo["number"].values
-    topMergedChunkNumbers = topMergedChunkNumbers.tolist()
-    
-    # get the sequental segment from topk where first chunk is top 1
-    selectedChunks = getSegmentTopK(topMergedChunkNumbers,startIdx,oneHole)
-    Table_Name = "MergedChunks"
-    list_columns = ["id","number","InitialChunkNumber","speaker"]
-    filter_condition ={"number": selectedChunks,
-                       "videoId": [videoId]}
-    mergedChunkInfo = get_table_from_db(cursor, Table_Name, list_columns, filter_conditions=filter_condition)
+        topMergedChunkIds = topMergedChunkIds.tolist()
 
-    # get the initial chunk numbers of the selected chunk
-    initialChunkNumber = []
-    for chunk in selectedChunks:
-        value = mergedChunkInfo.loc[mergedChunkInfo["number"] == chunk, "InitialChunkNumber"].iloc[0]
-        numbers = value.strip("[]").split(',')
-        value = [float(num) for num in numbers]
-        initialChunkNumber.extend(value)
+        # get topk merged chunks info using their ids
+        Table_Name = "MergedChunks"
+        list_columns = ["id","number","InitialChunkNumber","speaker"]
+        filter_condition ={"id": topMergedChunkIds}
+        mergedChunkInfo = get_table_from_db(cursor, Table_Name, list_columns, filter_conditions=filter_condition)
 
-    initialChunkNumber = sorted(set(initialChunkNumber))
-    
-    # extract the information time of the first and last initialchunk number
-    Table_Name = "InitialChunks"
-    list_columns = ["startTimeStamp","endTimeStamp","speaker"]
-    filter_condition ={"number": [initialChunkNumber[0],initialChunkNumber[-1]],
-                       "videoId": [videoId]}
-    initialChunkInfo = get_table_from_db(cursor, Table_Name, list_columns, filter_conditions=filter_condition)
-    output ={"startTimeStamp": np.min(initialChunkInfo["startTimeStamp"].values),
-             "endTimeStamp": np.max(initialChunkInfo["endTimeStamp"].values)}
-    output["duration"] = output["endTimeStamp"] - output["startTimeStamp"]
-    return output
+        # reorder merged chunk info in the same order of ids in topMergedChunkIds
+        mergedChunkInfo["__order__"] = mergedChunkInfo["id"].apply(lambda x: topMergedChunkIds.index(x))
+        mergedChunkInfo= mergedChunkInfo.sort_values("__order__").drop(columns="__order__").reset_index(drop=True)
+
+        # get the chunk numbers of topk merged chunk
+        topMergedChunkNumbers =  mergedChunkInfo["number"].values
+        topMergedChunkNumbers = topMergedChunkNumbers.tolist()
+
+        # get the sequental segment from topk where first chunk is top 1
+        selectedChunks = getSegmentTopK(topMergedChunkNumbers,startIdx,oneHole)
+        Table_Name = "MergedChunks"
+        list_columns = ["id","number","InitialChunkNumber","speaker"]
+        filter_condition ={"number": selectedChunks,
+                           "videoId": [videoId]}
+        mergedChunkInfo = get_table_from_db(cursor, Table_Name, list_columns, filter_conditions=filter_condition)
+
+        # get the initial chunk numbers of the selected chunk
+        initialChunkNumber = []
+        for chunk in selectedChunks:
+            value = mergedChunkInfo.loc[mergedChunkInfo["number"] == chunk, "InitialChunkNumber"].iloc[0]
+            numbers = value.strip("[]").split(',')
+            value = [float(num) for num in numbers]
+            initialChunkNumber.extend(value)
+
+        initialChunkNumber = sorted(set(initialChunkNumber))
+
+        # extract the information time of the first and last initialchunk number
+        Table_Name = "InitialChunks"
+        list_columns = ["startTimeStamp","endTimeStamp","speaker"]
+        filter_condition ={"number": [initialChunkNumber[0],initialChunkNumber[-1]],
+                           "videoId": [videoId]}
+        initialChunkInfo = get_table_from_db(cursor, Table_Name, list_columns, filter_conditions=filter_condition)
+        output ={"startTimeStamp": np.min(initialChunkInfo["startTimeStamp"].values),
+                 "endTimeStamp": np.max(initialChunkInfo["endTimeStamp"].values)}
+        output["duration"] = output["endTimeStamp"] - output["startTimeStamp"]
+        return output
+    finally:
+        connection.close()
 
 def getSegmentTopK(TopKChunks,chunkIndex,oneHole):
     
