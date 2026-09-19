@@ -107,10 +107,10 @@ def convert_mp4_to_wav(root_folder):
 if __name__ == "__main__":
     
 
-    # Replace these with your details
-    api_id = 26860339       # your API ID
-    api_hash = '7b01d9b55b6b7adcf14446a017e46d20'
-    phone = '+33772204196' # your phone number with country code
+    # Telegram API credentials: https://my.telegram.org/apps
+    api_id = int(os.getenv("TELEGRAM_API_ID", "0"))
+    api_hash = os.getenv("TELEGRAM_API_HASH", "")
+    phone = os.getenv("TELEGRAM_PHONE", "")
     channel_username = 'sayyed_speeches'  # e.g. 'my_channel'
     base_download_folder = "/mnt/d/Personal/PromptSpeech/videos"
     output_folder = "/mnt/d/Personal/PromptSpeech/videosPerYear"

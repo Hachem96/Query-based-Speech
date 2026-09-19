@@ -1,10 +1,13 @@
 
 import os
 import psycopg2
+from dotenv import load_dotenv
 from psycopg2 import sql
 from psycopg2.extras import Json
 from pgvector.psycopg2 import register_vector
 from pgvector import Vector
+
+load_dotenv()
 
 def create_database():
     """
@@ -174,13 +177,9 @@ def add_row(table_name,columnValues):
         columns = list(columnValues.keys())
         values = list(columnValues.values())
 
-        # prevent to add new video with a name that already exists in the database
-        if(table_name=="Video"):
-            videoName = columnValues["name"]
-            exists = videoIsExist(configuration,videoName)
-            if exists:                
-                print(f"Video with name '{videoName}' already exists in database, please provide antoher name for your video")  
-                return -1
+        # NOTE: the caller (processVideo/addNewVideo.add_new_video) already checks
+        # for a duplicate video name via videoIsExist() before reaching here.
+
         # Build the INSERT query dynamically
         insert_query = sql.SQL(
                             "INSERT INTO {} ({}) VALUES ({}) RETURNING id"

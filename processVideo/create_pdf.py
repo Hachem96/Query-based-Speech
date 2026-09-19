@@ -94,7 +94,6 @@ def correctTranscriptionText(transcriptionPath,videoName):
     lines = speechTranscContent.split("\n\n")
     count = len(lines) 
     print(count)
-    # sk-94e1848b9e784d3f8d5036a6e7fec108 # deepseekAPI
     client = OpenAI(
         api_key= os.getenv("API_KEY_DEEPSEEK"),  #
         base_url="https://api.deepseek.com/v1", #"https://dashscope-intl.aliyuncs.com/compatible-mode/v1",  
