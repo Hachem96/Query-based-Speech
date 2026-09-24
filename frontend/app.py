@@ -17,16 +17,19 @@ app.title = "Es2al Sayed - إسأل سيد"
 
 # PostgreSQL connection pool
 DB_CONFIG = {
-    'host': 'localhost',
-    'port': 5433,
-    'database': 'SpeechDatabaseInfo',
-    'user': 'postgres',
-    'password': 'root'
+    'host': os.getenv("DB_HOST", "localhost"),
+    'port': int(os.getenv("DB_PORT", "5433")),
+    'database': os.getenv("DB_NAME", "SpeechDatabaseInfo"),
+    'user': os.getenv("DB_USER", "postgres"),
+    'password': os.getenv("DB_PASSWORD"),
 }
 MAIN_MEDIA_PATH = os.getenv("MAIN_MEDIA_PATH", "/mnt/d/Personal/PromptSpeech")
 MEDIA_ROUTE = "/media"
 
-DATABASE_URL = f"postgresql://{DB_CONFIG['user']}:{DB_CONFIG['password']}@{DB_CONFIG['host']}:{DB_CONFIG['port']}/{DB_CONFIG['database']}"
+DATABASE_URL = sa.engine.URL.create(
+    "postgresql", username=DB_CONFIG['user'], password=DB_CONFIG['password'],
+    host=DB_CONFIG['host'], port=DB_CONFIG['port'], database=DB_CONFIG['database'],
+)
 engine = sa.create_engine(DATABASE_URL, echo=False, future=True)
 
 # Create connection pool
@@ -41,19 +44,9 @@ except Exception as e:
 @app.server.route(f'{MEDIA_ROUTE}/<path:path>')
 def serve_media(path):
     """Serve media files from the MAIN_MEDIA_PATH directory"""
-    try:
-        # Construct full file path
-        full_path = os.path.join(MAIN_MEDIA_PATH, path)
-        directory = os.path.dirname(full_path)
-        filename = os.path.basename(full_path)
-        
-        if os.path.exists(full_path):
-            return send_from_directory(directory, filename)
-        else:
-            return "File not found", 404
-    except Exception as e:
-        print(f"Error serving media: {e}")
-        return f"Error: {str(e)}", 500
+    # send_from_directory safe-joins `path` onto the fixed root and 404s on
+    # traversal attempts; never build the directory argument from client input.
+    return send_from_directory(MAIN_MEDIA_PATH, path)
 
 # Helper function to convert database paths to served URLs
 def convert_to_media_url(db_path):
@@ -348,7 +341,7 @@ def create_books_list_view():
 def create_video_player_view(video_id):
     try:
         conn = get_db_connection()
-        video = pd.read_sql_query(f'SELECT * FROM "Video" WHERE id = {video_id}', conn).iloc[0]
+        video = pd.read_sql_query('SELECT * FROM "Video" WHERE id = %s', conn, params=[int(video_id)]).iloc[0]
         return_db_connection(conn)
     except Exception as e:
         print(f"Error loading video: {e}")
@@ -401,7 +394,7 @@ def create_video_player_view(video_id):
 def create_book_viewer(book_id):
     try:
         conn = get_db_connection()
-        book = pd.read_sql_query(f'SELECT * FROM "Book" WHERE id = {book_id}', conn).iloc[0]
+        book = pd.read_sql_query('SELECT * FROM "Book" WHERE id = %s', conn, params=[int(book_id)]).iloc[0]
         return_db_connection(conn)
     except Exception as e:
         print(f"Error loading book: {e}")
@@ -480,7 +473,7 @@ def update_video_grid(subject, year):
         print(f"Error in update_video_grid: {e}")
         import traceback
         traceback.print_exc()
-        return html.Div(f"Error loading videos: {str(e)}", className='text-center text-danger')
+        return html.Div("Error loading videos.", className='text-center text-danger')
 
 # ---------- Books Grid Callback ----------
 
@@ -543,7 +536,7 @@ def toggle_pdf_modal(trans_clicks, summ_clicks, transl_clicks, close_clicks, vid
     
     try:
         conn = get_db_connection()
-        video = pd.read_sql_query(f'SELECT * FROM "Video" WHERE id = {video_id}', conn).iloc[0]
+        video = pd.read_sql_query('SELECT * FROM "Video" WHERE id = %s', conn, params=[int(video_id)]).iloc[0]
         return_db_connection(conn)
         
         if trigger_id == 'btn-transcription':
@@ -580,9 +573,7 @@ def handle_chat(n_clicks, query, video_id):
     
     try:
         conn = get_db_connection()
-        video = pd.read_sql_query(
-            f'SELECT * FROM "Video" WHERE id = {video_id}', conn
-        ).iloc[0]
+        video = pd.read_sql_query('SELECT * FROM "Video" WHERE id = %s', conn, params=[int(video_id)]).iloc[0]
         return_db_connection(conn)
         
         result = get_answer_timestamp(video['name'], query)
@@ -612,7 +603,7 @@ def handle_chat(n_clicks, query, video_id):
         print(f"Error in chat: {e}")
         import traceback
         traceback.print_exc()
-        return html.Div(f"Error: {str(e)}", style={'color': 'red'}), query, None
+        return html.Div("حدث خطأ أثناء معالجة سؤالك. حاول مرة أخرى.", style={'color': 'red'}), query, None
 
 # ---------- Clientside Callback for Video Seeking ----------
 

@@ -48,8 +48,8 @@ There is **no test suite and no linter/formatter config**. Scripts are driven by
 
 - **Backend** (`backend/*`) reads DB config from env vars: `DB_NAME`, `DB_PASSWORD`, `DB_HOST`, `DB_PORT`
   (user is hard-coded to `postgres`).
-- **Dash frontend** (`frontend/app.py`) **ignores those** and hard-codes `localhost:5433`, `postgres`/`root`,
-  database `SpeechDatabaseInfo`.
+- **Dash frontend** (`frontend/app.py`) reads the same `DB_*` vars (plus optional `DB_USER`), but falls back to
+  `localhost:5433`, user `postgres`, database `SpeechDatabaseInfo`; `DB_PASSWORD` has no default.
 - `MAIN_MEDIA_PATH` env var is the root media files are served from — by the Dash app (Flask `/media/<path>`)
   and by the FastAPI app (`backend/api/mediaAPI.py`, `/media/{path}`, with `Range`/`206` support for video
   seeking); `Video`/`Book` path columns in the DB are stored relative to it.
