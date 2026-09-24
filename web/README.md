@@ -48,7 +48,7 @@ picks it up automatically). `pnpm build` / `pnpm start` for production.
 
 ```
 app/
-  layout.tsx            RTL shell (<html lang="ar" dir="rtl">) + nav
+  layout.tsx            shell + nav; <html lang/dir> from the `lang` cookie (ar/rtl default, en/ltr)
   page.tsx              video grid; subject/year filters live in the URL (?subject=&year=)
   videos/[id]/page.tsx  server-fetches the video, renders <VideoWatch>
   books/page.tsx

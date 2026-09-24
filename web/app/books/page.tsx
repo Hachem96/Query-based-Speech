@@ -5,16 +5,17 @@ import EmptyState from "@/components/EmptyState";
 import { CardGridSkeleton } from "@/components/Skeletons";
 import { cardClass } from "@/components/MediaCard";
 import { listBooks, mediaUrl } from "@/lib/api";
+import { getT } from "@/lib/i18n-server";
 
 export const dynamic = "force-dynamic";
 
 async function BookGrid() {
-  const books = await listBooks();
+  const [books, t] = await Promise.all([listBooks(), getT()]);
 
   if (books.length === 0) {
     return (
       <EmptyState>
-        <p className="m-0">لم تُضَف أي كتب إلى المكتبة بعد.</p>
+        <p className="m-0">{t.books.noBooks}</p>
       </EmptyState>
     );
   }
@@ -23,7 +24,7 @@ async function BookGrid() {
     <div className="grid-cards">
       {books.map((book) => {
         const cover = mediaUrl(book.coverUrl);
-        const title = book.title ?? "بدون عنوان";
+        const title = book.title ?? t.books.untitled;
         const meta = [book.author, book.year].filter(Boolean).join(" · ");
         return (
           <Link key={book.id} href={`/books/${book.id}`} className={cardClass}>
@@ -31,7 +32,7 @@ async function BookGrid() {
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={cover}
-                alt={`غلاف كتاب: ${title}`}
+                alt={t.books.coverAlt(title)}
                 loading="lazy"
                 className="aspect-video w-full border-b object-cover"
               />
@@ -55,10 +56,11 @@ async function BookGrid() {
   );
 }
 
-export default function BooksPage() {
+export default async function BooksPage() {
+  const t = await getT();
   return (
     <>
-      <h1 className="mb-5 text-2xl font-bold tracking-tight sm:text-3xl">مكتبة الكتب</h1>
+      <h1 className="mb-5 text-2xl font-bold tracking-tight sm:text-3xl">{t.books.title}</h1>
       <Suspense fallback={<CardGridSkeleton count={6} />}>
         <BookGrid />
       </Suspense>

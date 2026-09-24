@@ -2,8 +2,9 @@ import Link from "next/link";
 import { VideoIcon } from "lucide-react";
 import { mediaUrl, type Video } from "@/lib/api";
 import { cardClass } from "@/components/MediaCard";
+import type { Dictionary } from "@/lib/i18n";
 
-export default function VideoCard({ video }: { video: Video }) {
+export default function VideoCard({ video, t }: { video: Video; t: Dictionary }) {
   const cover = mediaUrl(video.coverUrl);
   const meta = [video.subject, video.year].filter(Boolean).join(" · ");
 
@@ -13,7 +14,7 @@ export default function VideoCard({ video }: { video: Video }) {
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={cover}
-          alt={`غلاف فيديو: ${video.name}`}
+          alt={t.video.coverAlt(video.name)}
           loading="lazy"
           className="aspect-video w-full border-b object-cover"
         />

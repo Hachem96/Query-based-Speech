@@ -14,6 +14,7 @@ import { mediaUrl, runInference, type InferenceResult, type Video } from "@/lib/
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useT } from "@/components/locale-provider";
 
 function fmt(seconds: number): string {
   if (!Number.isFinite(seconds)) return "00:00";
@@ -31,6 +32,7 @@ function Time({ children }: { children: React.ReactNode }) {
 }
 
 export default function VideoWatch({ video }: { video: Video }) {
+  const t = useT();
   const videoRef = useRef<HTMLVideoElement>(null);
   const searchParams = useSearchParams();
   const src = mediaUrl(video.videoUrl);
@@ -70,7 +72,7 @@ export default function VideoWatch({ video }: { video: Video }) {
       seekTo(res.startTimeStamp);
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "تعذّر الاتصال بالخادم. حاول مرة أخرى.",
+        err instanceof Error ? err.message : t.video.connectionError,
       );
     } finally {
       setLoading(false);
@@ -78,9 +80,9 @@ export default function VideoWatch({ video }: { video: Video }) {
   }
 
   const docs = [
-    { label: "النص الكامل", href: mediaUrl(video.transcriptionUrl), Icon: FileTextIcon },
-    { label: "الملخّص", href: mediaUrl(video.summaryUrl), Icon: ListIcon },
-    { label: "الترجمة", href: mediaUrl(video.translationUrl), Icon: LanguagesIcon },
+    { label: t.video.transcript, href: mediaUrl(video.transcriptionUrl), Icon: FileTextIcon },
+    { label: t.video.summary, href: mediaUrl(video.summaryUrl), Icon: ListIcon },
+    { label: t.video.translation, href: mediaUrl(video.translationUrl), Icon: LanguagesIcon },
   ];
 
   return (
@@ -95,13 +97,13 @@ export default function VideoWatch({ video }: { video: Video }) {
             className="aspect-video w-full rounded-lg bg-black shadow-xl shadow-black/15 dark:shadow-black/50"
           />
         ) : (
-          <EmptyBox>ملف هذا الفيديو غير متوفر.</EmptyBox>
+          <EmptyBox>{t.video.fileMissing}</EmptyBox>
         )}
       </div>
 
       <div className="flex flex-col gap-4">
         <section
-          aria-label="مستندات الفيديو"
+          aria-label={t.video.docsLabel}
           className="flex flex-col gap-2 rounded-lg border bg-card p-3"
         >
           {docs.map(({ label, href, Icon }) =>
@@ -118,7 +120,7 @@ export default function VideoWatch({ video }: { video: Video }) {
                 variant="outline"
                 className="justify-start"
                 disabled
-                title="غير متوفر لهذا الفيديو"
+                title={t.video.docUnavailable}
               >
                 <Icon data-icon="inline-start" aria-hidden="true" />
                 {label}
@@ -130,20 +132,20 @@ export default function VideoWatch({ video }: { video: Video }) {
         <form onSubmit={onAsk} className="flex flex-col gap-3 rounded-lg border bg-card p-4">
           <h3 className="m-0 flex items-center gap-2 text-[15px] font-bold">
             <MessageSquareIcon className="size-4 text-brand" aria-hidden="true" />
-            اسأل سؤالاً
+            {t.video.askHeading}
           </h3>
           {/* dir="auto": a question typed in English flows LTR, Arabic flows RTL. */}
           <Textarea
             dir="auto"
-            placeholder="اكتب سؤالك عن هذا الفيديو..."
+            placeholder={t.video.askPlaceholder}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            aria-label="سؤالك عن الفيديو"
+            aria-label={t.video.askLabel}
             className="min-h-26 bg-background"
           />
           <Button type="submit" disabled={loading || !query.trim()} className="w-full">
             <SearchIcon data-icon="inline-start" aria-hidden="true" />
-            {loading ? "جارٍ البحث…" : "ابحث عن الإجابة"}
+            {loading ? t.video.searching : t.video.search}
           </Button>
 
           <div aria-live="polite" className="flex flex-col gap-2.5 empty:hidden">
@@ -164,14 +166,14 @@ export default function VideoWatch({ video }: { video: Video }) {
               <div className="flex flex-col items-start gap-2.5 rounded-md border-s-[3px] border-brand bg-brand-muted p-3 text-sm">
                 <Button type="button" size="sm" onClick={() => seekTo(result.startTimeStamp)}>
                   <PlayIcon data-icon="inline-start" aria-hidden="true" />
-                  انتقل إلى <Time>{fmt(result.startTimeStamp)}</Time>
+                  {t.video.jumpTo} <Time>{fmt(result.startTimeStamp)}</Time>
                 </Button>
                 <p className="m-0 text-muted-foreground">
-                  المقطع{" "}
+                  {t.video.segment}{" "}
                   <Time>
                     {fmt(result.startTimeStamp)} → {fmt(result.endTimeStamp)}
                   </Time>{" "}
-                  ({Math.round(result.duration)} ثانية)
+                  ({t.video.seconds(Math.round(result.duration))})
                 </p>
               </div>
             )}

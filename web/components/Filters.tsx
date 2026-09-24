@@ -10,11 +10,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useT } from "@/components/locale-provider";
 
 // Radix Select forbids `""` as an item value, so "no filter" is a sentinel.
 const ALL = "__all__";
 
 export default function Filters({ options }: { options: FilterOptions }) {
+  const t = useT();
   const router = useRouter();
   const params = useSearchParams();
   const subjectId = useId();
@@ -35,7 +37,7 @@ export default function Filters({ options }: { options: FilterOptions }) {
             htmlFor={subjectId}
             className="text-xs font-semibold tracking-wide text-muted-foreground"
           >
-            المادة
+            {t.filters.subject}
           </label>
           <Select
             value={params.get("subject") ?? ALL}
@@ -45,7 +47,7 @@ export default function Filters({ options }: { options: FilterOptions }) {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value={ALL}>كل المواد</SelectItem>
+              <SelectItem value={ALL}>{t.filters.allSubjects}</SelectItem>
               {options.subjects.map((s) => (
                 <SelectItem key={s} value={s}>
                   {/* Subject names may be Latin script — let each decide its own direction. */}
@@ -63,7 +65,7 @@ export default function Filters({ options }: { options: FilterOptions }) {
             htmlFor={yearId}
             className="text-xs font-semibold tracking-wide text-muted-foreground"
           >
-            السنة
+            {t.filters.year}
           </label>
           <Select
             value={params.get("year") ?? ALL}
@@ -73,7 +75,7 @@ export default function Filters({ options }: { options: FilterOptions }) {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value={ALL}>كل السنوات</SelectItem>
+              <SelectItem value={ALL}>{t.filters.allYears}</SelectItem>
               {options.years.map((y) => (
                 <SelectItem key={y} value={String(y)} className="tabular-nums">
                   {y}

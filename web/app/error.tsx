@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import EmptyState from "@/components/EmptyState";
 import { Button } from "@/components/ui/button";
+import { useT } from "@/components/locale-provider";
 
 export default function Error({
   error,
@@ -11,18 +12,19 @@ export default function Error({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  const t = useT();
   useEffect(() => {
     console.error(error);
   }, [error]);
 
   return (
     <EmptyState role="alert">
-      <p className="m-0 text-foreground">تعذّر تحميل هذه الصفحة.</p>
+      <p className="m-0 text-foreground">{t.errors.loadFailed}</p>
       <p className="m-0 max-w-[48ch] text-sm">
-        قد يكون الخادم غير متاح. تأكّد من أن واجهة الـ API قيد التشغيل ويمكن الوصول إليها.
+        {t.errors.loadFailedHint}
       </p>
       <Button type="button" onClick={reset}>
-        إعادة المحاولة
+        {t.errors.retry}
       </Button>
     </EmptyState>
   );

@@ -4,22 +4,25 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import ThemeToggle from "./ThemeToggle";
+import LanguageToggle from "./LanguageToggle";
+import { useT } from "./locale-provider";
 
 const TABS = [
   {
     href: "/",
-    label: "الفيديوهات",
+    key: "videos",
     isActive: (p: string) => p === "/" || p.startsWith("/videos"),
   },
   {
     href: "/books",
-    label: "الكتب",
+    key: "books",
     isActive: (p: string) => p.startsWith("/books"),
   },
-];
+] as const;
 
 export default function SiteHeader() {
   const pathname = usePathname() || "/";
+  const t = useT();
 
   return (
     <header className="sticky top-0 z-20 border-b bg-background/85 backdrop-blur">
@@ -27,7 +30,7 @@ export default function SiteHeader() {
         <Link
           href="/"
           className="flex items-center gap-2.5 rounded-sm focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none"
-          aria-label="إسأل سيد — الصفحة الرئيسية"
+          aria-label={t.header.homeLabel}
         >
           <span
             aria-hidden="true"
@@ -36,7 +39,7 @@ export default function SiteHeader() {
             س
           </span>
           <span className="flex flex-col leading-tight">
-            <span className="text-base font-bold">إسأل سيد</span>
+            <span lang="ar" className="text-base font-bold">إسأل سيد</span>
             {/* Latin brand name: force LTR so the bidi algorithm never flips it. */}
             <span
               dir="ltr"
@@ -49,7 +52,7 @@ export default function SiteHeader() {
         </Link>
 
         <nav
-          aria-label="التنقل الرئيسي"
+          aria-label={t.header.navLabel}
           className="order-3 -mb-3 flex w-full gap-1 sm:order-none sm:mb-0 sm:me-auto sm:w-auto"
         >
           {TABS.map((tab) => {
@@ -66,13 +69,14 @@ export default function SiteHeader() {
                   active && "text-foreground after:opacity-100",
                 )}
               >
-                {tab.label}
+                {t.header[tab.key]}
               </Link>
             );
           })}
         </nav>
 
-        <div className="ms-auto sm:ms-0">
+        <div className="ms-auto flex items-center gap-2 sm:ms-0">
+          <LanguageToggle />
           <ThemeToggle />
         </div>
       </div>

@@ -2,17 +2,18 @@
 
 import { useEffect, useState } from "react";
 import { useTheme } from "next-themes";
-import { MonitorIcon, MoonIcon, SunIcon } from "lucide-react";
+import { MoonIcon, SunIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { useT } from "@/components/locale-provider";
 
 const OPTIONS = [
-  { value: "light", label: "فاتح", Icon: SunIcon },
-  { value: "dark", label: "داكن", Icon: MoonIcon },
-  { value: "system", label: "حسب النظام", Icon: MonitorIcon },
+  { value: "light", Icon: SunIcon },
+  { value: "dark", Icon: MoonIcon },
 ] as const;
 
 export default function ThemeToggle() {
+  const t = useT();
   const { theme, setTheme } = useTheme();
   // next-themes only knows the real theme after mount; render a neutral
   // group until then so SSR and the first client paint match.
@@ -23,11 +24,12 @@ export default function ThemeToggle() {
   return (
     <div
       role="group"
-      aria-label="سمة العرض"
+      aria-label={t.theme.groupLabel}
       className="inline-flex overflow-hidden rounded-md border border-input bg-card p-0.5"
     >
-      {OPTIONS.map(({ value, label, Icon }) => {
+      {OPTIONS.map(({ value, Icon }) => {
         const on = current === value;
+        const label = t.theme[value];
         return (
           <Tooltip key={value}>
             <TooltipTrigger asChild>

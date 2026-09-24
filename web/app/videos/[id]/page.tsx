@@ -4,11 +4,13 @@ import BackLink from "@/components/BackLink";
 import VideoWatch from "@/components/VideoWatch";
 import { WatchSkeleton } from "@/components/Skeletons";
 import { getVideo } from "@/lib/api";
+import { getT } from "@/lib/i18n-server";
 
 export const dynamic = "force-dynamic";
 
 export default async function VideoPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const t = await getT();
 
   let video;
   try {
@@ -24,7 +26,7 @@ export default async function VideoPage({ params }: { params: Promise<{ id: stri
 
   return (
     <>
-      <BackLink href="/">العودة إلى الفيديوهات</BackLink>
+      <BackLink href="/">{t.video.back}</BackLink>
       <h1 dir="auto" className="mb-1 text-2xl font-bold tracking-tight text-start sm:text-3xl">
         {video.name}
       </h1>
