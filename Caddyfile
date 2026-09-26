@@ -1,0 +1,15 @@
+# Reverse proxy + automatic HTTPS for the compose stack (docker-compose.yml).
+# SITE_DOMAIN comes from .env.production, e.g. es2alsayed.com. Media is not
+# proxied here -- browsers fetch it straight from the OSS/CDN custom domain.
+{$SITE_DOMAIN} {
+	encode gzip zstd
+
+	@api path /api/* /inference/*
+	handle @api {
+		reverse_proxy api:8000
+	}
+
+	handle {
+		reverse_proxy web:3000
+	}
+}

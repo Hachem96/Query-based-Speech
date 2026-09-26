@@ -93,6 +93,8 @@ export default function VideoWatch({ video }: { video: Video }) {
             ref={videoRef}
             src={src}
             controls
+            controlsList="nodownload"
+            onContextMenu={(e) => e.preventDefault()}
             playsInline
             className="aspect-video w-full rounded-lg bg-black shadow-xl shadow-black/15 dark:shadow-black/50"
           />

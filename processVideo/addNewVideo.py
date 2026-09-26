@@ -5,7 +5,17 @@ from processVideo.embedding import embed_chunks
 from backend.DataBaseFunctions import*
 from pathlib import Path
 import json
-from processVideo.create_pdf import create_pdf_correctedTranscription, correctTranscriptionText
+# processVideo.create_pdf (weasyprint + DeepSeek) is imported lazily below, only when a
+# PDF/correction actually has to be generated.
+
+# When set, merged-chunk JSON is written under this dir instead of into each video folder,
+# so ingestion can read straight from a read-only media drive.
+MERGED_CHUNKS_DIR = os.getenv("MERGED_CHUNKS_DIR")
+
+# When set, a run stops after adding this many new videos (existing ones don't count),
+# so the corpus can be ingested in batches.
+MAX_NEW_VIDEOS = int(os.getenv("MAX_NEW_VIDEOS", "0")) or None
+nbNewVideos = 0
 transcriptionConfiguration = {
         "averagChannel": False,
         "channelNumber": 0,
@@ -44,13 +54,13 @@ def add_new_video(videoName,year,mp4Path,caption,transcribe=True,correctTranscri
         # create mo3 file
         mp3Path = os.path.join(parent_dir, os.path.splitext(mp4Path)[0] + ".wav")
         # convert video to mp4
-        if not os.path.exists(mp3Path):
+        if transcribe and not os.path.exists(mp3Path):
             convert_mp4_to_wav(mp4Path,mp3Path)
         
         # create cover image for video using caption
         cover_path =os.path.join(parent_dir, "cover.png")
-        #if not os.path.exists(cover_path):
-        text_file_to_image(cover_path, caption,font_size=38)
+        if not os.path.exists(cover_path):
+            text_file_to_image(cover_path, caption,font_size=38)
         
         # transcruption
         if(transcribe):
@@ -69,6 +79,7 @@ def add_new_video(videoName,year,mp4Path,caption,transcribe=True,correctTranscri
             correctTranscription_path = os.path.join(parent_dir,"Transcription", f"correctedTranscription_{videoName}.txt")
             if correctTranscription:
                 if not os.path.exists(correctTranscription_path):
+                    from processVideo.create_pdf import correctTranscriptionText
                     correctTranscription_path = correctTranscriptionText(textTranscription_path,videoName)
             
             if not os.path.exists(correctTranscription_path):
@@ -77,7 +88,10 @@ def add_new_video(videoName,year,mp4Path,caption,transcribe=True,correctTranscri
 
             if correctTranscription_path != "Not Available":
                 # create pdf from corrected transcription
-                output_pdf_path = create_pdf_correctedTranscription(correctTranscription_path, caption,videoName)
+                output_pdf_path = os.path.join(parent_dir,"Transcription", f"transcription_{videoName}.pdf")
+                if not os.path.exists(output_pdf_path):
+                    from processVideo.create_pdf import create_pdf_correctedTranscription
+                    output_pdf_path = create_pdf_correctedTranscription(correctTranscription_path, caption,videoName)
                 
                 if(makeSummary):
                     # summary_pdf_path = create_summary_pdf(correctTranscription_path, videoName)
@@ -158,7 +172,7 @@ def add_new_video(videoName,year,mp4Path,caption,transcribe=True,correctTranscri
             temp = add_row(table_name,chunkColumnsInfo)
         
         # merge transcribed chunk: 3 chunks with overal equals to 2
-        merged_chunksPath = merge_transcribed_chunks(transcriptionChunk_path, nbChunksToMerge, nbOverlapChunks)
+        merged_chunksPath = merge_transcribed_chunks(transcriptionChunk_path, nbChunksToMerge, nbOverlapChunks, MERGED_CHUNKS_DIR)
         
         
         # add merged chunk info and their embeddings 
@@ -203,9 +217,10 @@ def add_VideosOneYear(folderPath,transcribe,correctTranscription, makeSummary):
     """
     if not os.path.isdir(folderPath):
         raise ValueError(f"Provided path '{folderPath}' is not a valid directory.")
+    global nbNewVideos
     i = 0
     # Iterate over immediate subfolders
-    for folder_name in os.listdir(folderPath):
+    for folder_name in sorted(os.listdir(folderPath)):
         folder_path = os.path.join(folderPath, folder_name)
         i = i + 1
         if os.path.isdir(folder_path):
@@ -216,14 +231,26 @@ def add_VideosOneYear(folderPath,transcribe,correctTranscription, makeSummary):
             except:
                 year = 0000
             captionPath = os.path.join(folderPath,folder_name,"caption.txt")
+            transcriptionPath = os.path.join(folderPath,folder_name,"Transcription","transcription_whisper_large_v3.json")
+            if not (os.path.exists(mp4Path) and os.path.exists(captionPath)):
+                print(f"Skipping {folder_name}: missing mp4 or caption.txt")
+                continue
+            if not transcribe and not os.path.exists(transcriptionPath):
+                print(f"Skipping {folder_name}: no transcription JSON and transcription is disabled.")
+                continue
             with open(captionPath, "r", encoding="utf-8") as f:
                 caption = f.read()
-            if(transcribe==False):
-                if not os.path.isdir(os.path.join(folderPath,folder_name,"Transcription")):
-                    print(f"Skipping transcription for video {folder_name} as transcription does not exist and transcription is disabled.")
-                    continue
 
-            add_new_video(folder_name,year,mp4Path,caption,transcribe,correctTranscription, makeSummary)
+            if MAX_NEW_VIDEOS is not None and nbNewVideos >= MAX_NEW_VIDEOS:
+                return
+            if videoIsExist(folder_name):
+                continue
+            try:
+                add_new_video(folder_name,year,mp4Path,caption,transcribe,correctTranscription, makeSummary)
+                nbNewVideos += 1
+            except Exception as e:
+                # keep going; a failed video may leave a Video row without chunks/embeddings
+                print(f"FAILED {folder_name}: {e!r}")
 
 def add_all_videos(basePath,transcribe,correctTranscription, makeSummary):
     """
@@ -235,7 +262,10 @@ def add_all_videos(basePath,transcribe,correctTranscription, makeSummary):
     if not os.path.isdir(basePath):
         raise ValueError(f"Provided path '{basePath}' is not a valid directory.")
     # Iterate over immediate subfolders
-    for folder_name in os.listdir(basePath):
+    for folder_name in sorted(os.listdir(basePath)):
+        if MAX_NEW_VIDEOS is not None and nbNewVideos >= MAX_NEW_VIDEOS:
+            print(f"Reached MAX_NEW_VIDEOS={MAX_NEW_VIDEOS}, stopping.")
+            break
         folder_path = os.path.join(basePath, folder_name)
         if os.path.isdir(folder_path):
             print(f"Processing year folder: {folder_name}")
@@ -247,5 +277,6 @@ if __name__ == "__main__":
     # add_new_video("25-04-2005","2005",mp4path,caption)
     #evaluationPath = "/mnt/d/Personal/PromptSpeech/EvaluationData"
     # add_VideosOneYear(evaluationPath,transcribe=False)
-    basePath = "/mnt/d/Personal/PromptSpeech/VideosPerYear"
+    # exact on-disk case matters: the folder name becomes the prefix of every stored media path
+    basePath = os.getenv("VIDEOS_BASE_PATH", "/mnt/d/Personal/PromptSpeech/videosPerYear")
     add_all_videos(basePath,transcribe=False,correctTranscription=False, makeSummary=False)

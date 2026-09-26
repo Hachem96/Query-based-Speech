@@ -1,11 +1,11 @@
-# Production compose file for the Hetzner VPS. See DEPLOYMENT.md and
+# Production compose file for the VPS. See DEPLOYMENT.md and
 # ENV_VARS.md (not committed -- copy .env.production alongside this file;
 # both files are gitignored) for what every variable means and how to get it.
 #
 #   docker compose --env-file .env.production up -d --build
 #
-# Omit the `db` service entirely if using managed Postgres (Neon) instead of
-# self-hosting -- point DB_HOST/DB_PORT/DB_PASSWORD at Neon and drop `depends_on`.
+# Omit the `db` service entirely if using ApsaraDB RDS for PostgreSQL instead of
+# self-hosting -- point DB_HOST/DB_PORT/DB_PASSWORD at RDS and drop `depends_on`.
 
 services:
   db:
@@ -46,9 +46,38 @@ services:
       dockerfile: Dockerfile
       args:
         NEXT_PUBLIC_API_BASE: ${NEXT_PUBLIC_API_BASE}
+        MEDIA_BASE_URL: ${MEDIA_BASE_URL}
     depends_on:
       - api
     restart: unless-stopped
 
+  # The only service with published ports: api/web/db are reachable solely
+  # through Caddy on the compose network, which is what makes the api's
+  # --forwarded-allow-ips=* safe (see Dockerfile). Do not add ports elsewhere.
+  caddy:
+    image: caddy:2
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      SITE_DOMAIN: ${SITE_DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      default:
+        # Next's server components fetch NEXT_PUBLIC_API_BASE (the public
+        # domain). This alias resolves it to Caddy inside the network instead
+        # of hairpinning out through the EIP; the TLS cert still matches.
+        aliases:
+          - ${SITE_DOMAIN}
+    depends_on:
+      - api
+      - web
+    restart: unless-stopped
+
 volumes:
   pgdata: {}
+  caddy_data: {}
+  caddy_config: {}

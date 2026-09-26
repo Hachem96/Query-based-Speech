@@ -22,3 +22,6 @@ session_name.session
 ENV_VARS.md
 .env.production
 .env.production.*
+
+# merged-chunk JSON from local ingestion (MERGED_CHUNKS_DIR)
+.merged_chunks/

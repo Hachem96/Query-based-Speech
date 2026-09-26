@@ -16,6 +16,9 @@ COPY . .
 # public API URL changes, setting it wrong is not fixable at runtime.
 ARG NEXT_PUBLIC_API_BASE
 ENV NEXT_PUBLIC_API_BASE=$NEXT_PUBLIC_API_BASE
+# Media origin allowed by the CSP in next.config.mjs (headers are baked at build).
+ARG MEDIA_BASE_URL
+ENV MEDIA_BASE_URL=$MEDIA_BASE_URL
 RUN pnpm build
 
 FROM base AS runner

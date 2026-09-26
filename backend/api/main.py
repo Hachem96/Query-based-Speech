@@ -40,7 +40,7 @@ app.include_router(catalog_router, prefix="/api", tags=["Catalog"])
 
 # ``media_router`` serves files from MAIN_MEDIA_PATH with Range support and
 # competes with the embedding model for CPU/bandwidth on the same box. Once
-# MEDIA_BASE_URL points at object storage (R2), video/cover/PDF bytes never
+# MEDIA_BASE_URL points at object storage (OSS), video/cover/PDF bytes never
 # hit this process, so the proxy route is dropped entirely.
 if not MEDIA_BASE_URL:
     from backend.api.mediaAPI import router as media_router

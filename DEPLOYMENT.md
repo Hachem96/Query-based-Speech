@@ -1,56 +1,65 @@
 # Deployment Plan — Es2al Sayed / إسأل سيد
 
-Scope: deploy the **Next.js** frontend (`web/`) + **FastAPI** backend (`backend/`) publicly,
-build and seed the PostgreSQL + pgvector database from the videos on the external drive,
-and host all media (mp4 / covers / PDFs) on object storage.
+Scope: deploy the **Next.js** frontend (`web/`) + **FastAPI** backend (`backend/`) publicly on
+**Alibaba Cloud**. We build and seed the PostgreSQL + pgvector database from the videos on the
+external drive, and host all media (mp4 / covers / PDFs) on **Alibaba Cloud OSS**.
 
-Everything below is derived from reading the repo on 2026-09-07. Where a fact could not be
-verified from the machine (the external drive is not mounted, the DB does not exist yet),
-it is called out as **VERIFY** with the exact command to run — do not skip those.
+Last revised 2026-09-25. Anything that can't be checked from the repo (the drive contents,
+Alibaba prices and regional service availability) is marked **VERIFY**. Don't skip those.
 
 ---
 
-## 0. TL;DR — recommended architecture
+## 0. Decisions & architecture
 
-| Layer | Recommendation | Est. cost / month |
+### 0.1 — Region: pick an international region, NOT mainland China
+
+This decision comes before everything else. A **mainland-China** region (Hangzhou, Beijing,
+Shanghai, …) breaks this stack in four ways:
+
+- **ICP filing (备案)** is required before a domain can serve on ports 80/443, and before a
+  custom domain can be bound to OSS or CDN. That takes weeks and needs a Chinese entity.
+- **Hugging Face is blocked.** The `Dockerfile` downloads `Qwen/Qwen3-Embedding-0.6B` at build time, so the build fails.
+- **Docker Hub** is slow or unreliable, and so is PyPI without a mirror.
+- **`next/font/google`** can't reach Google Fonts at build time, so `pnpm build` fails.
+
+**Recommended: Middle East — Riyadh (`me-central-1`) or Dubai (`me-east-1`)**, because it is
+closest to the Arabic-speaking audience. Frankfurt (`eu-central-1`) or Singapore
+(`ap-southeast-1`) are fallbacks. **VERIFY** before committing that the chosen region offers
+ECS, OSS with custom domains, CDN, and (if you want it) ApsaraDB RDS for PostgreSQL. Put
+**every resource in the same region**, so ECS↔OSS traffic can use the free internal endpoint.
+
+### 0.2 — Stack
+
+| Layer | Choice | Notes |
 |---|---|---|
-| Object storage (mp4, covers, PDFs) | **Cloudflare R2** + public bucket domain | ~$0.015/GB storage, **$0 egress**. 100 GB ≈ **$1.50** |
-| Database (Postgres 16 + pgvector) | **Self-hosted on the same VPS** via `pgvector/pgvector:pg16` Docker image, with a nightly `pg_dump` to R2. Managed **Neon** is the fallback if you don't want to run backups. | **$0** self-hosted / **$0–19** Neon |
-| Backend (FastAPI + local embedding model) | **One small VPS** (Hetzner CX22 = 2 vCPU / 4 GB ≈ €4.5, or CX32 / 8 GB ≈ €7 recommended — the SentenceTransformer model needs ~1.5 GB resident). Dockerised. | **€4.5–7** (~$5–8) |
-| Frontend (Next.js 15 SSR) | Same VPS, `pnpm build && pnpm start`, behind **Caddy** (auto-HTTPS) reverse proxy. Vercel Hobby (free, non-commercial) is the alternative. | **$0** (shares the VPS) |
-| DNS / TLS | Cloudflare DNS (free) + Caddy on the box | **$0** |
-
-**Total: roughly $7–10/month** self-hosting DB + frontend on the one VPS, plus R2 storage
-proportional to video size. Using Neon instead adds $0–19.
+| Object storage (mp4, covers, PDFs) | **OSS** bucket, public-read, served on a **custom domain** `media.es2alsayed.com` (optionally fronted by **Alibaba Cloud CDN**) | A custom domain is **mandatory**, see 5.2. **Egress is billed per GB**, see Section 9. |
+| Compute | **One ECS instance**, Ubuntu 24.04, **≥ 8 GB RAM** (e.g. 2 vCPU / 8 GB general-purpose `g`-family `.large`, or 4 vCPU / 8 GB) | Runs API + Next + Postgres + Caddy via Docker Compose. The embedding model needs ~1.5 GB resident. |
+| Database (Postgres 16 + pgvector) | **Self-hosted on the ECS box** (`pgvector/pgvector:pg16` container), nightly `pg_dump` → OSS | Alternative: **ApsaraDB RDS for PostgreSQL**. It supports pgvector but needs code changes, see 5.5. |
+| Frontend (Next.js 15 SSR) | Same ECS box, `web/Dockerfile` (standalone output) | |
+| TLS / reverse proxy | **Caddy** container, auto-HTTPS | |
+| DNS | **Alibaba Cloud DNS** (or keep your current registrar's DNS) | `es2alsayed.com` → ECS EIP, `media.es2alsayed.com` → CNAME to the OSS/CDN domain. |
 
 ```
-                      ┌───────────── one VPS (Hetzner) ─────────────┐
-   browser  ──HTTPS──▶│  Caddy :443                                 │
-                      │    ├── /  , /videos/* , /books/*  ─▶ Next :3000
-                      │    └── /api/* , /inference/* , /media/*  ─▶ FastAPI :8000
-                      │                                     │        │
-                      │  Postgres+pgvector :5432 (Docker) ◀──┘        │
-                      └─────────────────────────────────────────────┘
-   <video src>  ──────────────────────────────────────────▶  Cloudflare R2 (public)
+                      ┌──────────── ECS instance (one box) ───────────────┐
+   browser  ──HTTPS──▶│  caddy :443                                       │
+                      │    ├── /  , /videos/* , /books/*  ─▶ web:3000     │
+                      │    └── /api/* , /inference/*       ─▶ api:8000    │
+                      │                                        │          │
+                      │  db (Postgres+pgvector, :5432 internal) ◀┘         │
+                      └───────────────────────────────────────────────────┘
+   <video>/<img>/<iframe> ──HTTPS──▶ media.es2alsayed.com ─▶ (CDN) ─▶ OSS bucket
 ```
 
-The FastAPI container serves inference + catalog JSON. Video bytes are served **directly
-from R2** (see code change #4) so the VPS never needs the multi-hundred-GB media disk.
+The API only serves inference and catalog JSON. Media bytes go **straight from OSS/CDN** to the
+browser (`MEDIA_BASE_URL` set, see 2.1), so the ECS disk and CPU never touch video files.
 
 ---
 
-## 1. STOP — verify this before planning anything else
+## 1. STOP — verify transcriptions exist before anything else
 
-`processVideo/addNewVideo.py:2` has the ASR import commented out:
-
-```python
-#from ASR.SpeechTextConversion import transcribe_One_Speech
-```
-
-So `add_new_video(..., transcribe=True)` will crash, and only `transcribe=False` works —
-which **requires a pre-existing transcription JSON per video** at
-`<video folder>/Transcription/transcription_whisper_large_v3.json`
-(`addNewVideo.py:59`).
+`processVideo/addNewVideo.py:2` has the ASR import commented out. That means only
+`transcribe=False` works, and that path **requires a pre-existing transcription JSON per video** at
+`<video folder>/Transcription/transcription_whisper_large_v3.json`.
 
 **VERIFY (mount the TOSHIBA drive first):**
 
@@ -60,504 +69,387 @@ find "$DRIVE" -name "*.mp4" | wc -l
 find "$DRIVE" -name "transcription_whisper_large_v3.json" | wc -l
 find "$DRIVE" -name "caption.txt" | wc -l
 du -sh "$DRIVE"
-# expected layout per addNewVideo.py: <MainFolder>/<Year>/<VideoName>/<VideoName>.mp4
-find "$DRIVE" -maxdepth 3 -type d | head -30
+find "$DRIVE" -maxdepth 3 -type d | head -30   # expect <MainFolder>/<Year>/<VideoName>/
+find "$DRIVE" -name "*.dump" -o -name "*.sql"  # an existing DB dump lets you skip Section 4
 ```
 
-**Branch A — the two counts roughly match** (transcriptions already exist):
-ingestion is a *fix-two-bugs-and-run* job (Section 4). Proceed with this plan.
+- **Branch A — the mp4 and transcription counts roughly match:** ingestion is a straight run
+  (Section 4). Continue with this plan.
+- **Branch B — the transcription count is ~0:** this is a transcription project first, not a
+  deployment task. You'd run Whisper `large-v3` + `pyannote/speaker-diarization-3.1` (a gated HF
+  model) over the whole corpus on a rented GPU. That code path has **never run end to end** in
+  this repo. Budget days, not hours.
 
-**Branch B — the transcription count is ~0:**
-this is **not a deployment task**, it is a transcription project first:
-Whisper `large-v3` + `pyannote/speaker-diarization-3.1` (a **gated** Hugging Face model
-requiring token + license acceptance) over the whole corpus, ideally on a rented GPU,
-through `ASR/SpeechTextConversion.py` + the currently-disabled code path in `addNewVideo.py`
-which **has never been run end to end** in this repo. Budget days, not hours. Decide this
-explicitly before continuing.
-
-Also record the numbers — they size the database (Section 6).
+Record the numbers. They size the database (Section 6) and the OSS bill (Section 9).
 
 ---
 
-## 2. Required code changes (before any deploy)
+## 2. Code status
 
-All are small and localised. Do them on a branch, test locally (Section 3), then ship.
+### 2.1 — Already done
 
-**Status as of 2026-09-19: 2.1, 2.2, 2.3, 2.4, 2.5 done. 2.6/2.7 need an env var set at
-deploy time, not a code change. 2.8 not done (cosmetic). 2.9 partially done — see the note
-at the end of 2.9, secrets are still in git history.** Also fixed this session, not in the
-original plan: a DB-connection leak in `InferenceQuery.py` (every `/inference` call opened a
-connection and never closed it — would have exhausted Postgres `max_connections` under any
-sustained traffic, attack or not), a broken `torch==2.14.0` pin (no such version exists;
-pinned to `2.4.1`, verified against `sentence-transformers==6.0.1`'s `torch>=2.2`
-requirement), a symlink bypass of the media path-traversal guard (`abspath` → `realpath`),
-and error-leakage in `/inference` (raw exception text returned to the client; unknown
-`videoName` now returns 404 instead of a 500 with a pandas stack message). Rate limiting
-(`slowapi`, see Section 2.10) was also added — it did not exist anywhere before this.
+| Change | Where |
+|---|---|
+| `main.py` mounts `/inference`, `/api` (catalog) with CORS (`FRONTEND_ORIGINS`); `/table` (SQL-injectable table/column read) is **not** mounted | `backend/api/main.py` |
+| Media URLs point at object storage when `MEDIA_BASE_URL` is set. The `/media` proxy is only registered when it's **unset** (local dev). The frontend passes absolute URLs through unchanged. | `backend/api/db.py:to_media_url`, `web/lib/api.ts:mediaUrl` |
+| `add_row("Video")` bug removed (it gave every child row a `NULL` `videoId`) | `backend/DataBaseFunctions.py` |
+| `requirements.txt` complete: `sentence-transformers==6.0.1`, `torch==2.4.1` (CPU wheels), `slowapi` | `backend/requirements.txt` |
+| DB-connection leak in `/inference` fixed. Errors no longer leak `str(e)`. An unknown `videoName` returns 404. Symlink bypass of the media path guard fixed (`realpath`). | `backend/InferenceQuery.py`, `backend/api/*` |
+| Rate limiting: `/inference` 10/min, `/api/*` 60/min, `/media/*` 120/min per client IP. `query`/`videoName` length caps. | `backend/api/limiter.py` |
+| Real client IP behind the proxy: uvicorn runs with `--proxy-headers --forwarded-allow-ips=*` | `Dockerfile` |
+| Security headers + CSP | `web/next.config.mjs` |
+| Root `Dockerfile` (model baked into the image), `web/Dockerfile` (standalone), `docker-compose.yml`, root `.dockerignore` | repo root |
+| Committed secrets removed from the working tree | see 2.5 |
 
-### 2.1 — `backend/api/main.py` is behind the rest of the code (CRITICAL) — DONE
+### 2.2 — CSP allows the media origin — DONE
 
-Current file mounts **only** `/inference` and `/table`. It does **not** mount the catalog
-or media routers and has **no CORS**, yet `web/lib/api.ts` calls `/api/videos`,
-`/api/books`, `/api/filters`, `/media/*`, and the browser calls `/inference/` cross-origin.
-The Next.js app cannot work against `main.py` as written.
+The CSP in `web/next.config.mjs` had no `frame-src`, so it fell back to `default-src 'self'`.
+That blocked the book viewer's PDF `<iframe>` (`web/app/books/[id]/page.tsx`) from the media
+domain. It also blocked local dev, where covers, video and PDFs come from `http://localhost:8000`
+and `https:`-only rules don't cover that. `img-src`, `media-src` and the new `frame-src` now also
+allow `NEXT_PUBLIC_API_BASE` and `MEDIA_BASE_URL`. Headers are computed at **build time**, so
+`MEDIA_BASE_URL` is also a build arg of `web/Dockerfile` (compose passes it). Rebuild `web` if the
+media domain changes.
 
-Rewrite to:
+### 2.3 — Caddy in `docker-compose.yml` — DONE
 
-```python
-import os
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+`docker-compose.yml` had no proxy and no published ports, so nothing was reachable from outside.
+It now has a `caddy` service (`caddy:2`, ports 80/443, config in the repo-root `Caddyfile`, certs
+persisted in the `caddy_data` volume). It is the **only** service with published ports. The
+API's `--forwarded-allow-ips=*` is only safe if Caddy is the sole route to it, so **never add
+`ports:` to `api`, `web` or `db`.**
 
-from backend.api.inferenceAPI import router as inference_router
-from backend.api.catalogAPI import router as catalog_router
-from backend.api.mediaAPI import router as media_router   # keep only if NOT using R2 (see 2.4)
+Caddy also gets a network alias equal to `SITE_DOMAIN`. Next's server components fetch the
+catalog from `NEXT_PUBLIC_API_BASE` (`https://es2alsayed.com`). Without the alias, those SSR
+fetches would leave the box to the EIP and come back in, which may not work on ECS (hairpin NAT)
+and would put all SSR traffic in one rate-limit bucket. With it, containers resolve the domain
+straight to Caddy, and the TLS cert still matches.
 
-app = FastAPI()
+### 2.4 — Needs only an env var, not code
 
-origins = [o.strip() for o in os.getenv("FRONTEND_ORIGINS", "http://localhost:3000").split(",") if o.strip()]
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=origins,
-    allow_methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["*"],
-)
+- **`Qwen_API_KEY`** must be set to any non-empty string (e.g. `unused`).
+  `backend/embedding.py` builds an OpenAI client at import time, and the SDK raises on `None`.
+  Set the same for `API_KEY_QWENEMBEDDING` when running `processVideo/`.
+- **`MEDIA_BASE_URL=https://media.es2alsayed.com`** in production. Leave it unset locally.
 
-app.include_router(inference_router, prefix="/inference", tags=["Inference"])
-app.include_router(catalog_router,   prefix="/api",       tags=["Catalog"])
-app.include_router(media_router,     prefix="/media",     tags=["Media"])   # only if not using R2
-```
+### 2.5 — REQUIRED before going public: rotate leaked credentials
 
-### 2.2 — Do NOT mount `/table` publicly (security) — DONE
+The DeepSeek key and the Telegram `api_id`/`api_hash`/phone were removed from the current files,
+but **they are still in git history** (`git log -p -S '7b01d9b55b6b7adcf14446a017e46d20'`).
 
-`backend/api/getTableInfoAPI.py` → `backend/searchinDatabase.py:get_table_from_db()` builds
-`f'SELECT {columns_str} FROM "{Table_Name}"'` from the **request body**. Table and column
-names are string-interpolated from user input = arbitrary read of any table/column.
-Leave `table_info_router` unmounted (done above by omission). Delete the file if unused.
+- Revoke the DeepSeek key and issue a new one.
+- Reset the Telegram app credentials at my.telegram.org. Treat the phone number as exposed.
+- If the repo will be public, run `git filter-repo`. It rewrites history and breaks existing clones.
+- No Telethon `.session` file was ever committed (checked).
 
-### 2.3 — Fix the `add_row("Video")` bug in `backend/DataBaseFunctions.py` — DONE
+### 2.6 — Optional
 
-`add_row()` (~line 178) has:
+- **`DB_USER`:** `user="postgres"` is hard-coded in five `psycopg2.connect` calls
+  (`backend/api/db.py`, `backend/InferenceQuery.py`, `backend/searchinDatabase.py`, 2×
+  `backend/DataBaseFunctions.py`). That's fine for self-hosted Postgres. It's **required** if you
+  use ApsaraDB RDS (5.5).
+- **Cover font:** `processVideo/common.py:7` hard-codes a `/mnt/d/...Amiri-Bold.ttf` path. Without
+  it, covers can't render Arabic. Make it an env var if covers matter; the catalog works with `coverUrl: null`.
+- **Books ingest:** `processVideo/addNewBook.py` calls `bookIsExist(title, author)` against a
+  3-parameter signature. Fix it only if you ingest books.
 
-```python
-if(table_name=="Video"):
-    videoName = columnValues["name"]
-    exists = videoIsExist(configuration,videoName)   # `configuration` is undefined; wrong arity
-```
+### 2.7 — Abuse surface: what's true and what isn't
 
-`configuration` is never defined and the real signature is `videoIsExist(videoName)`.
-The bare `except Exception` swallows the `NameError`, `add_row` returns `None`, so every
-`InitialChunks` / `MergedChunks` / `Embeddings` row is inserted with `videoId = NULL`.
-
-`add_new_video()` already does its own existence check (`addNewVideo.py:38`), so **delete
-this whole `if table_name=="Video"` block**. (Same class of bug in
-`processVideo/addNewBook.py:25` — `bookIsExist(title, author)` vs 3-param signature — fix
-only if you ingest books.)
-
-### 2.4 — Serve media from R2 instead of the `/media` proxy — CODE DONE, NOT YET ACTIVE
-
-This is not a cost optimization, it's an availability fix: as long as media flows through
-`mediaAPI.py`, video/cover/PDF bytes compete with the embedding model for CPU on the same
-small VPS, and a handful of clients scrubbing a video can saturate the box. `to_media_url()`
-now emits an R2 URL when `MEDIA_BASE_URL` is set, and `main.py` now mounts `mediaAPI` **only
-when `MEDIA_BASE_URL` is unset** — so locally (no R2 yet) it still works exactly as before,
-and once you set the env var in production the proxy route is not even registered.
-
-```python
-MEDIA_BASE_URL = os.getenv("MEDIA_BASE_URL", "")  # e.g. https://media.es2alsayed.com
-
-def to_media_url(db_path):
-    if db_path is None:
-        return None
-    db_path = str(db_path).strip()
-    if db_path in _NOT_AVAILABLE:
-        return None
-    rel = db_path
-    if MAIN_MEDIA_PATH and rel.startswith(MAIN_MEDIA_PATH):
-        rel = rel[len(MAIN_MEDIA_PATH):]
-    rel = rel.lstrip("/\\").replace("\\", "/")
-    if MEDIA_BASE_URL:
-        return f"{MEDIA_BASE_URL}/{rel}"
-    return f"/media/{rel}"      # local-dev fallback
-```
-
-`web/lib/api.ts:mediaUrl()` already passes through anything matching `^https?://` untouched,
-so **the frontend needs no change**. With `MEDIA_BASE_URL` set you can drop `mediaAPI` from
-`main.py` entirely and the backend never touches video files.
-
-The DB stores paths as `{MainFolder}/{Year}/{VideoName}/{VideoName}.mp4`
-(`addNewVideo.py:100-118`). Upload the tree to R2 preserving that structure (Section 5.2)
-and the keys line up with zero DB rewriting.
-
-### 2.5 — `backend/requirements.txt` is incomplete — DONE
-
-Added `sentence-transformers==6.0.1` + `torch==2.4.1` (verified: 6.0.1 requires
-`torch>=2.2`, so this pair actually resolves — an earlier pass at this pinned a
-nonexistent `torch==2.14.0`, which would have hard-failed the Docker build; verify any
-future pin bump against PyPI before trusting it) and `slowapi` (Section 2.10).
-
-Keep `psycopg2` → `psycopg2-binary` for the container unless you install libpq/build tools.
-
-### 2.6 — `Qwen_API_KEY` must be set even though it's unused
-
-`backend/embedding.py:17` does `OpenAI(api_key=os.getenv("Qwen_API_KEY"), ...)` at import.
-The openai v1 SDK raises if the key is `None`. The active path uses the **local** model, so
-set `Qwen_API_KEY=unused` (any non-empty string) in the backend environment. Same for
-`API_KEY_QWENEMBEDDING` if you run `processVideo/` code.
-
-### 2.7 — `DB_USER` (verify against your provider)
-
-`user="postgres"` is hard-coded in **five** places: `backend/api/db.py:19`,
-`backend/InferenceQuery.py:17`, `backend/searchinDatabase.py:8`, and twice in
-`backend/DataBaseFunctions.py`. Self-hosted Postgres uses `postgres`, so if you self-host
-(recommended) **no change needed**. If you use Neon/Supabase and the role is not `postgres`,
-thread a `DB_USER` env var through all five `psycopg2.connect(...)` calls.
-
-Note `DataBaseFunctions.create_database()` runs `CREATE DATABASE` while connected to
-`dbname="postgres"` — fine for self-hosted, **not possible on Neon** (DB is pre-provisioned).
-In that case run only `creat_db_tables()` and do `CREATE EXTENSION vector;` by hand first.
-
-### 2.8 — `common.py` hard-coded font path (only if covers matter)
-
-`processVideo/common.py:7`: `font_path = "/mnt/d/Personal/PromptSpeech/Amiri/Amiri-Bold.ttf"`.
-Missing → `ImageFont.load_default()`, which **cannot render Arabic**. Make it an env var and
-ship an Amiri `.ttf`, or accept blank/garbled cover images. (The catalog also works with
-`coverUrl: null`.)
-
-### 2.9 — Rotate committed secrets before going public — WORKING TREE SCRUBBED, CREDENTIALS STILL LIVE
-
-Both were removed from the current files (the DeepSeek key comment deleted;
-`ExportVideoApp.py` now reads `TELEGRAM_API_ID`/`TELEGRAM_API_HASH`/`TELEGRAM_PHONE` from
-env vars). **This does not make the credentials safe** — both are still fetchable from git
-history (`git log -p -S '7b01d9b55b6b7adcf14446a017e46d20'` finds the commit). The only
-actions that actually matter:
-
-- Revoke the DeepSeek key at the provider and issue a new one.
-- Reset the Telegram app credentials at my.telegram.org (the phone number itself can't be
-  "rotated" — treat it as exposed).
-- Decide on `git filter-repo` (rewrites history, breaks any existing clones/forks) if this
-  repo is going public. If it stays private, revoking the credentials is probably enough.
-- (Checked this session: no Telethon `.session` file was ever committed — that would have
-  been a live authenticated login, worse than the api_hash.)
+- This is a public, unauthenticated app with one CPU-expensive endpoint (`/inference`). Rate limiting
+  is the real protection. Once deployed, verify it keys on the client IP, not the proxy: fire 11
+  quick `/inference` calls from two different networks, and only the noisy one should get 429s.
+- **"Watch, not download" can't be enforced** for a plain `<video src>`. Anything the browser can
+  play, the user can save. The only realistic options add friction: short-lived **OSS presigned URLs**
+  (re-signed per page load, which means a code change in `to_media_url`) or HLS segmentation.
+  Don't claim download protection in user-facing copy.
+- Re-check the CSP if you add any third-party script or embed.
 
 ---
 
-### 2.10 — Rate limiting & abuse surface — DONE (app-level), CADDY WIRING STILL NEEDED
+## 3. Phase 1 — local setup & test (on this Mac)
 
-Nothing rate-limited anything before this session. Given the feature set — public,
-unauthenticated, one CPU-expensive endpoint — this is the actual security story for this
-app, more than SQL injection or auth (there's no auth surface; the DB access patterns were
-already parameterized correctly except the now-removed `/table` route).
-
-Added `slowapi` (`backend/api/limiter.py`, shared `Limiter` instance):
-- `POST /inference/` — **10/minute per key** (the expensive one: an embedding model forward
-  pass + a full per-video vector scan on every call).
-- `/api/*` (catalog) — 60/minute per key.
-- `/media/*` — 120/minute per key (only mounted when `MEDIA_BASE_URL` is unset — see 2.4).
-- `InferenceRequest.query`/`videoName` now have `max_length` (500 / 200) to stop
-  oversized-payload abuse of the embedding model.
-- `/inference/`'s exception handler no longer leaks `str(e)` to the client (logs
-  server-side instead), and an unknown `videoName` returns 404 instead of a 500 with a
-  pandas stack trace.
-
-**Not yet done — required before this is actually effective in production:**
-
-- `slowapi`'s default key function (`get_remote_address`) reads the TCP peer address. Behind
-  Caddy that's `127.0.0.1` for *every* request — so today's config either rate-limits all
-  users as one shared bucket or does nothing. Fix: Caddy must forward the real client IP
-  (`header_up X-Forwarded-For {remote_host}` — Caddy does this by default via
-  `reverse_proxy`, verify it's not stripped), and uvicorn must trust it:
-  `uvicorn backend.api.main:app --proxy-headers --forwarded-allow-ips='127.0.0.1'` (tighten
-  the IP to Caddy's actual address). Without this, treat rate limiting as **not deployed**
-  even though the code is there.
-- Put Cloudflare in front (orange-cloud DNS) for `es2alsayed.com` (the HTML/API origin
-  only — not the R2 media domain) for free WAF/bot-fight rules as a second layer above the
-  app-level limits.
-- **"Watch, not download" is not enforceable** for a plain `<video src>` served over HTTP —
-  anything the browser can play, the user can save (view-source, devtools network tab, or a
-  downloader extension). The realistic options are friction, not prevention: short-lived
-  signed R2 URLs (re-signed per page load) or HLS segmentation. Don't represent the current
-  design as preventing downloads in any user-facing copy.
-- No CSP/security headers existed on the Next.js side; added in `web/next.config.mjs`
-  (`X-Frame-Options`, `X-Content-Type-Options`, a CSP scoped to `NEXT_PUBLIC_API_BASE` +
-  Google Fonts, `Permissions-Policy` disabling camera/mic/geolocation). Re-check the CSP if
-  you add any third-party script/embed later — it's currently locked to `'self'`.
-
----
-
-## 3. Phase 1 — local setup & test (do this first, on this Mac)
-
-Prereqs on this machine: Docker ✓, pnpm ✓, node ✓, **ffmpeg ✗ (install: `brew install ffmpeg`)**,
-Python is 3.14 — **too new**, `torch` / `sentence-transformers` have no 3.14 wheels yet.
-Install 3.11: `brew install python@3.11`.
-
-### 3.1 — Local Postgres + pgvector
+Prereqs: Docker ✓, pnpm ✓, node ✓, **ffmpeg ✗** (`brew install ffmpeg`), and **Python 3.11**
+(`brew install python@3.11`). The system Python 3.14 has no torch wheels.
 
 ```bash
+# 3.1 Postgres + pgvector (use :pg15 instead if you plan on ApsaraDB RDS — see 5.5)
 docker run -d --name espg -p 5432:5432 \
-  -e POSTGRES_PASSWORD=root -e POSTGRES_DB=SpeechDatabaseInfo \
-  pgvector/pgvector:pg16
+  -e POSTGRES_PASSWORD=root -e POSTGRES_DB=SpeechDatabaseInfo pgvector/pgvector:pg16
 docker exec -it espg psql -U postgres -d SpeechDatabaseInfo -c "CREATE EXTENSION IF NOT EXISTS vector;"
-```
 
-### 3.2 — Backend venv + env
-
-```bash
+# 3.2 Backend venv + env
 python3.11 -m venv .venv && source .venv/bin/activate
-pip install -r backend/requirements.txt      # after edit 2.5
-
+pip install -r backend/requirements.txt
 export DB_NAME=SpeechDatabaseInfo DB_PASSWORD=root DB_HOST=localhost DB_PORT=5432
-export MAIN_MEDIA_PATH="/Volumes/TOSHIBA EXT/Personal/PromptSpeech"   # local: keep /media proxy
+export MAIN_MEDIA_PATH="/Volumes/TOSHIBA EXT/Personal/PromptSpeech"
 export Qwen_API_KEY=unused API_KEY_QWENEMBEDDING=unused
 export FRONTEND_ORIGINS=http://localhost:3000
-# leave MEDIA_BASE_URL unset locally so /media serves from the drive
+# MEDIA_BASE_URL unset locally → /media proxy serves from the drive
+python -m backend.DataBaseFunctions        # creates tables; first run downloads the model (~1.2 GB)
 
-python -m backend.DataBaseFunctions      # creates tables (see 2.7 note); first run downloads the model (~1.2 GB)
-```
-
-### 3.3 — Ingest a few videos locally (Section 4 covers the full run)
-
-```bash
-# edit processVideo/addNewVideo.py __main__ to point basePath at 2–3 sample video folders on the drive
+# 3.3 Ingest 2–3 sample videos (edit basePath in processVideo/addNewVideo.py __main__)
 python -m processVideo.addNewVideo
+
+# 3.4 Run
+uvicorn backend.api.main:app --host 0.0.0.0 --port 8000                 # terminal 1
+cd web && cp .env.example .env.local && pnpm install && pnpm dev        # terminal 2
 ```
 
-### 3.4 — Run the stack
-
-```bash
-uvicorn backend.api.main:app --host 0.0.0.0 --port 8000       # terminal 1
-
-cd web && cp .env.example .env.local                          # terminal 2
-# .env.local: NEXT_PUBLIC_API_BASE=http://localhost:8000
-pnpm install && pnpm dev
-```
-
-### 3.5 — Verify
+**Verify:**
 
 ```bash
 curl -s localhost:8000/api/videos | head
-curl -s localhost:8000/api/filters
-curl -s -X POST localhost:8000/inference/ \
-  -H 'Content-Type: application/json' \
+curl -s -X POST localhost:8000/inference/ -H 'Content-Type: application/json' \
   -d '{"videoName":"<a real video name>","query":"سؤال تجريبي"}'
 ```
 
-Then in the browser: `http://localhost:3000` → open a video → video plays and seeks →
-ask a question → player jumps to the returned timestamp. Check `/videos/<id>?t=120`
-deep-links. Test with an iPhone/Safari if possible (Range-request path).
+Then in the browser, open a video: it should play and seek. Ask a question: the player should
+jump to the returned segment. `/videos/<id>?t=120` should deep-link. Try it in Safari too.
 
 ---
 
-## 4. Phase 2 — build & seed the full database
+## 4. Phase 2 — build & seed the full database (locally)
 
-Run this **locally against the local Postgres** (3.1), not against the cloud DB.
-Reason: `add_row()` opens a **new connection per row** (`connectTodatabase()` on every call),
-and ingestion inserts one row per InitialChunk + per MergedChunk + per Embedding — tens of
-thousands of round trips. Over the internet to Neon that is hours of TLS handshakes; against
-localhost it is minutes. Migrate the finished DB afterwards (Section 5.3).
+Ingest against the **local** Postgres, not the cloud one. `add_row()` opens a new connection per
+row, which means tens of thousands of round trips. Migrate the finished DB afterwards (5.5).
 
-1. Apply code changes 2.3 (the `add_row` Video bug) and 2.7 as needed.
-2. Confirm Branch A from Section 1 (transcriptions present). If Branch B, do transcription first.
-3. Point `processVideo/addNewVideo.py` `__main__` `basePath` at the drive's `<MainFolder>`
+1. Confirm Branch A (Section 1).
+2. Point `basePath` in `processVideo/addNewVideo.py` `__main__` at the drive's `<MainFolder>`
    (the dir whose children are year folders). Keep `transcribe=False`,
-   `correctTranscription=False`, `makeSummary=False` unless you have the DeepSeek key and
-   want PDFs (needs `weasyprint`, `markdown`, and the Amiri font — 2.8).
-4. `python -m processVideo.addNewVideo`
-5. Spot-check:
+   `correctTranscription=False`, `makeSummary=False` unless you have a (new) DeepSeek key and want PDFs.
+3. `python -m processVideo.addNewVideo`
+4. Spot-check:
 
-```sql
-SELECT count(*) FROM "Video";
-SELECT count(*) FROM "Embeddings" WHERE "videoId" IS NULL;   -- must be 0 (the 2.3 bug)
-SELECT v.name, count(e.id) FROM "Video" v
-  LEFT JOIN "Embeddings" e ON e."videoId" = v.id GROUP BY v.name ORDER BY 2;
-```
+   ```sql
+   SELECT count(*) FROM "Video";
+   SELECT count(*) FROM "Embeddings" WHERE "videoId" IS NULL;   -- must be 0
+   SELECT v.name, count(e.id) FROM "Video" v
+     LEFT JOIN "Embeddings" e ON e."videoId" = v.id GROUP BY v.name ORDER BY 2;
+   ```
 
-6. Run a few `/inference/` calls locally and sanity-check the timestamps against the videos.
-7. (Optional) books: `python -m processVideo.addNewBook` after fixing `bookIsExist` (2.3).
+5. Run a few `/inference/` calls and sanity-check the timestamps against the videos.
 
-No vector index is needed: `compute_similarities` filters by `videoId` and scans only that
-one video's rows (a few hundred). Do **not** add IVFFlat/HNSW steps.
+No vector index is needed: `compute_similarities` scans only one video's rows (a few hundred).
 
 ---
 
-## 5. Phase 3 — provision cloud + migrate
+## 5. Phase 3 — provision Alibaba Cloud + migrate
 
-### 5.1 — Cloudflare R2
+### 5.1 — Account & access
 
-1. Create bucket, e.g. `es2alsayed-media`.
-2. Enable a public access domain (R2 dashboard → Settings → Public Development URL, or
-   connect a custom domain like `media.es2alsayed.com`). R2 serves `Range` requests natively.
-3. Create an R2 API token (S3 credentials) for uploads.
+1. Create the Alibaba Cloud (international) account and complete real-name verification.
+2. In **RAM**, create a user for uploads/backups with an AccessKey scoped to the media and
+   backup buckets only (e.g. the `AliyunOSSFullAccess` policy, or a custom bucket-scoped policy).
+   Don't use the root account's AccessKey.
 
-### 5.2 — Upload media (from the drive)
+### 5.2 — OSS bucket for media
 
-Use `rclone` (`brew install rclone`, `rclone config` → S3 → provider Cloudflare R2):
+1. Create bucket `es2alsayed-media` in the chosen region, Standard storage class.
+2. **Public access:** new buckets have **Block Public Access** on. Turn it off for this bucket,
+   then set the ACL to **public-read**, or add a bucket policy granting anonymous `oss:GetObject`.
+   Keep it **not** public-write.
+3. **Custom domain is mandatory.** Browser requests to the default
+   `<bucket>.oss-<region>.aliyuncs.com` domain get `Content-Disposition: attachment` +
+   `x-oss-force-download: true` in **all regions**. PDFs would download instead of rendering in
+   the iframe. So:
+   - Bucket → **Domain Names** → map `media.es2alsayed.com` (or map it on **CDN** with the bucket
+     as origin, which is recommended for video, see Section 9).
+   - Add the CNAME record it gives you in DNS.
+   - Attach an **HTTPS certificate** (a free DV cert from Certificate Management Service, or
+     upload your own). The CSP only allows `https:` media.
+4. **CORS:** not needed for `<video>`, `<img>` or `<iframe>`. Add a GET rule for
+   `https://es2alsayed.com` only if the frontend ever `fetch()`es media.
+5. Optionally turn on **hotlink protection** (Referer whitelist `es2alsayed.com`, allow empty
+   Referer for iOS media players). It adds friction but doesn't prevent downloads.
+
+### 5.3 — Upload media from the drive
+
+Use Alibaba's **`ossutil`** CLI (install it from the OSS docs, then run `ossutil config` with
+the RAM AccessKey and the region endpoint `oss-<region>.aliyuncs.com`; see `ENV_VARS.md` §4).
+Upload only what the app serves: mp4, covers and PDFs.
 
 ```bash
 DRIVE="/Volumes/TOSHIBA EXT/Personal/PromptSpeech"
-# Upload only what the app serves: mp4, cover.png, and Transcription/*.pdf
-rclone copy "$DRIVE" r2:es2alsayed-media \
-  --include "*/*/*/*.mp4" \
-  --include "*/*/*/cover.png" \
-  --include "*/*/*/Transcription/*.pdf" \
-  --transfers 8 --progress
+ossutil cp -r "$DRIVE/" oss://es2alsayed-media/PromptSpeech/ \
+  --include "*.mp4" --include "cover.png" --include "*.pdf" \
+  --update        # skip objects already uploaded, so an interrupted run can be resumed
 ```
 
-The R2 key of each object must equal the DB column value. DB values look like
-`PromptSpeech/2005/2005-04-25/2005-04-25.mp4` (`{MainFolder}/{Year}/{Video}/...`).
-`rclone copy "$DRIVE" r2:bucket` uploads the **contents** of `$DRIVE`, i.e. keys start at
-`2005/...` — so either point `rclone` at the parent of `PromptSpeech` **or** set
-`MEDIA_BASE_URL` to include the `PromptSpeech` segment. **Verify one URL by hand** before
-declaring done:
+`ossutil` 1.x and 2.x differ slightly in flag names, so check `ossutil help cp` for your version.
+Uploading hundreds of GB from a home connection takes a long time. Run it inside `tmux`/`screen`
+and rerun it with `--update` if it drops.
+
+**Key alignment:** each object key must equal the DB path after `to_media_url()` strips
+`MAIN_MEDIA_PATH`. The command above produces keys like
+`PromptSpeech/2005/2005-04-25/2005-04-25.mp4`. Run `SELECT "linkToMP4" FROM "Video" LIMIT 1;`,
+and set `MAIN_MEDIA_PATH` in production to whatever comes **before** `PromptSpeech/` in that
+value (empty if the DB value already starts with `PromptSpeech/`). **Verify one URL by hand:**
 
 ```bash
-# take a real linkToMP4 from the DB, prepend MEDIA_BASE_URL, curl -I it, expect 200 + Accept-Ranges: bytes
+# take a real linkToMP4 from the DB → build the URL the API would return → then:
+curl -I "https://media.es2alsayed.com/<key>"          # expect 200, Accept-Ranges: bytes, no Content-Disposition: attachment
+curl -I -H 'Range: bytes=0-1' "https://media.es2alsayed.com/<key>"   # expect 206
 ```
 
-### 5.3 — Database → managed / VPS Postgres
+### 5.4 — ECS instance
+
+1. Create the ECS instance: Ubuntu 24.04, **≥ 8 GB RAM** (4 GB is too tight for torch + Next +
+   Postgres). A 40–60 GB ESSD system disk is enough, since media lives on OSS and the rest is
+   Docker images (torch is several GB) plus the DB.
+   - Billing: **pay-by-traffic** public bandwidth is fine, because only HTML/JSON leaves the box.
+     Attach an **EIP** so the IP survives instance changes.
+   - Cheaper alternative: **Simple Application Server** with an 8 GB plan, if offered in the region.
+     **VERIFY** the price.
+2. **Security group:** inbound **22** (your IP only), **80**, **443**. Never open **5432**, 8000 or 3000.
+3. Install Docker Engine + the Compose plugin. Clone the repo and create `.env.production`
+   (see `ENV_VARS.md`).
+4. DNS: `es2alsayed.com` A-record → EIP. `media.es2alsayed.com` CNAME → OSS/CDN (5.2).
+
+### 5.5 — Database → ECS (default) or ApsaraDB RDS
 
 ```bash
-# from the local ingest DB
+# from the local ingest DB — custom format (preserves the vector-typed InitialChunkNumber column)
 pg_dump -U postgres -h localhost -d SpeechDatabaseInfo -Fc -f es2al.dump
-
-# target: create DB, enable pgvector, restore
-psql "<target admin conn string>" -c "CREATE EXTENSION IF NOT EXISTS vector;"
-pg_restore --no-owner --no-privileges -d "<target conn string>" es2al.dump
 ```
 
-Neon: create project (Postgres 16), run the `CREATE EXTENSION` first, then `pg_restore`.
-Self-hosted on the VPS: same `pgvector/pgvector:pg16` container as local, with a Docker
-volume + a nightly `pg_dump | rclone rcat r2:es2alsayed-backups/…`.
+**Self-hosted on ECS (default).** Start just the DB with
+`docker compose --env-file .env.production up -d db`. Without the env file `DB_PASSWORD` is empty
+and the container refuses to initialise. Then copy
+the dump into the container and restore:
 
-### 5.4 — VPS
+```bash
+docker compose exec db psql -U postgres -d SpeechDatabaseInfo -c "CREATE EXTENSION IF NOT EXISTS vector;"
+docker compose cp es2al.dump db:/tmp/es2al.dump
+docker compose exec db pg_restore -U postgres -d SpeechDatabaseInfo --no-owner --no-privileges /tmp/es2al.dump
+```
 
-1. Hetzner Cloud → Ubuntu 24.04, **CX32 (8 GB)** recommended (CX22/4 GB is the floor and
-   leaves little headroom for Next + torch + Postgres together).
-2. Install Docker + Docker Compose + Caddy.
-3. Point DNS (Cloudflare): `es2alsayed.com` → VPS IP, `media.es2alsayed.com` → R2.
+Nightly backup to a **separate private** bucket `es2alsayed-backups`, over the **internal**
+endpoint (`oss-<region>-internal.aliyuncs.com`, where same-region traffic is free). Use a
+lifecycle rule to expire old dumps after about 30 days. On the ECS box, run `ossutil config`
+with the `-internal` endpoint, then:
+
+```cron
+0 3 * * * cd /opt/es2alsayed && docker compose exec -T db pg_dump -U postgres -Fc SpeechDatabaseInfo > /tmp/es2al.dump && ossutil cp -f /tmp/es2al.dump oss://es2alsayed-backups/es2al-$(date +\%F).dump && rm /tmp/es2al.dump
+```
+
+Also enable an **ECS automatic snapshot policy** on the system disk (Postgres volume included)
+as a second recovery path.
+
+**ApsaraDB RDS for PostgreSQL (alternative).** It's managed and has backups built in, but costs
+more than running Postgres on the ECS box. Caveats:
+
+- pgvector is documented for **PG 14/15+** (minor engine ≥ 20230430). **VERIFY** which majors
+  your region offers. Dump from a matching local major (`pgvector/pgvector:pg15` in 3.1) to avoid
+  `pg_restore` version friction.
+- The account name `postgres` is almost certainly reserved, so thread a **`DB_USER` env var**
+  through the five connect calls (2.6).
+- `DataBaseFunctions.create_database()` issues `CREATE DATABASE` and won't work there. Create
+  the DB in the console, run `CREATE EXTENSION vector;` as the privileged account, then `pg_restore`.
+- Put it in the same VPC as ECS, whitelist only the ECS private IP, and set `DB_HOST` to the
+  internal endpoint. Drop the `db` service from compose.
 
 ---
 
 ## 6. Database size estimate (fill in after Section 1)
 
-Let **H** = total hours of audio (from `du`/duration of the mp4s).
+Let **H** = total hours of audio.
 
-- InitialChunks ≈ `H × 3600 / 30` ≈ `120·H` rows (~30 s each)
-- MergedChunks ≈ same order (3-merge / 2-overlap → ~1 merged per initial, minus speaker splits)
-- Embeddings: 1 row/merged chunk × `vector(1024)` float32 = **4 KB/row** + text columns
+- InitialChunks ≈ `120·H` rows (~30 s each). MergedChunks are about the same.
+- Embeddings: one `vector(1024)` float32 per merged chunk, ≈ 4 KB/row.
 
-Rough total ≈ **0.6–0.8 MB per hour of audio**
-→ 200 h ≈ 120–160 MB, 500 h ≈ 300–400 MB.
-
-Implication: a few hundred hours **fits Neon's free tier (0.5 GB)** and trivially fits a
-self-hosted volume. If `du` says the corpus is much larger, or Neon's cold-suspend latency
-on the first request is unacceptable, self-host Postgres on the VPS (no suspend, no size
-cap, ~$0).
+That's ≈ **0.6–0.8 MB per hour of audio** (200 h ≈ 120–160 MB). It fits trivially on the ECS disk.
 
 ---
 
 ## 7. Phase 4 — deploy
 
-### 7.1 — `Dockerfile` (repo root, replaces `backend/Dokcer`) — DONE
+### 7.1 — Images (done)
 
-`backend/Dokcer` was broken (misnamed; `CMD` used `api.main:app` while the code uses
-absolute imports `backend.api.main:app`/`from backend.*`; `COPY . .` from the `backend/`
-context put files where `backend.*` couldn't resolve; installed only the incomplete
-`requirements.txt`) — it's been deleted. The real one now lives at the **repo root**:
-`Dockerfile` (build context = repo root, not `backend/` — the absolute-import layout
-requires it). It bakes the embedding model into the image at build time (so container
-restarts don't re-download ~1.2 GB) and runs uvicorn with `--proxy-headers
---forwarded-allow-ips=*`, which is what makes the per-IP rate limiting in Section 2.10
-key on the real client IP instead of Caddy's — see the comment in the file for why `*` is
-safe only because Caddy is the sole route into the container on the compose network.
+- The root **`Dockerfile`** builds the API from the repo root (absolute `backend.*` imports) and bakes
+  the embedding model into the image. It needs Hugging Face access at build time, see 0.1.
+- **`web/Dockerfile`** is multi-stage with `output: "standalone"`. `NEXT_PUBLIC_API_BASE` is inlined
+  **at build time**, so set it to `https://es2alsayed.com` (same origin, via Caddy) before building.
+  Rebuild if it changes.
 
-`.dockerignore` moved from `backend/.dockerignore` to the repo root for the same
-build-context reason, and now also excludes `web/node_modules`, `web/.next`, `ASR/`,
-`DevAndRes/`, `frontend/` (none of it is needed at runtime) to keep the build context small.
+### 7.2 — `.env.production`
 
-### 7.2 — `docker-compose.yml` (repo root) — DONE
+Minimum values (full reference: `ENV_VARS.md`, gitignored):
 
-`docker-compose.yml` at the repo root wires up `db` (pgvector), `api` (the `Dockerfile`
-above), and `web` (`web/Dockerfile`, multi-stage, `output: "standalone"` — added to
-`web/next.config.mjs` — so the runtime image doesn't need `node_modules`). All the
-environment values it reads (`${DB_PASSWORD}`, `${MEDIA_BASE_URL}`, etc.) come from an
-`.env.production` file you create next to it — see `ENV_VARS.md` (gitignored, not
-committed — generate it locally or re-derive it from this doc) for what every variable
-means and how to obtain it. Omit the `db` service and point `DB_HOST`/`DB_PORT` at Neon
-instead if not self-hosting Postgres.
-
-Run it with: `docker compose --env-file .env.production up -d --build`
-
-### 7.3 — Caddy (`/etc/caddy/Caddyfile`)
-
-```
-es2alsayed.com {
-    @api path /api/* /inference/* /media/*
-    handle @api { reverse_proxy localhost:8000 }
-    handle { reverse_proxy localhost:3000 }
-}
+```dotenv
+SITE_DOMAIN=es2alsayed.com
+DB_PASSWORD=<strong random>
+MAIN_MEDIA_PATH=<prefix to strip, see 5.3>
+MEDIA_BASE_URL=https://media.es2alsayed.com
+FRONTEND_ORIGINS=https://es2alsayed.com
+NEXT_PUBLIC_API_BASE=https://es2alsayed.com
+Qwen_API_KEY=unused
 ```
 
-(Drop `/media/*` from `@api` if `MEDIA_BASE_URL` is set — media then never hits the VPS.)
-Caddy provisions TLS automatically. Caddy's `reverse_proxy` sets `X-Forwarded-For` by
-default — combined with the container's `--proxy-headers` flag (Section 7.1) this is what
-makes the per-IP rate limiting (Section 2.10) actually key on the real client IP instead of
-`127.0.0.1`. Verify with `curl -s localhost:8000/api/filters -H 'X-Forwarded-For: 1.2.3.4'`
-against a request log once deployed.
+`SITE_DOMAIN`, `FRONTEND_ORIGINS` and `NEXT_PUBLIC_API_BASE` must all name the same domain.
 
-### 7.4 — Alternative: Next.js on Vercel
+### 7.3 — `Caddyfile` (repo root) — DONE
 
-Import `web/` (root dir = `web`), set `NEXT_PUBLIC_API_BASE=https://api.es2alsayed.com`,
-add `https://<project>.vercel.app` and the prod domain to `FRONTEND_ORIGINS` on the API.
-Free for non-commercial use; needs the API on its own public subdomain.
+It serves `{$SITE_DOMAIN}`, sends `/api/*` and `/inference/*` to `api:8000` and everything else
+to `web:3000`, and gzip/zstd-compresses responses. Media isn't proxied, because browsers fetch it
+straight from the OSS/CDN domain. Caddy gets the TLS cert automatically once DNS points at the
+EIP and ports 80/443 are open. `reverse_proxy` sets `X-Forwarded-For`, which uvicorn trusts (7.1).
+
+### 7.4 — Bring it up
+
+```bash
+docker compose --env-file .env.production up -d --build
+docker compose logs -f api   # model load + first request
+```
 
 ---
 
 ## 8. Phase 5 — verify production
 
-- [ ] `curl -I https://media.es2alsayed.com/<real key>` → `200` + `Accept-Ranges: bytes`
-- [ ] `https://es2alsayed.com` lists videos, covers load from R2
-- [ ] open a video → plays, scrubbing works, works on iOS Safari
-- [ ] ask a question → `POST /inference/` returns, player seeks to the segment
-- [ ] `/videos/<id>?t=90` deep link starts at 0:90
-- [ ] books list + PDF viewer (if books ingested)
-- [ ] first request after idle: note latency (model already baked in; Neon cold-resume if used)
-- [ ] backup cron: `pg_dump` lands in R2
+- [ ] `curl -I https://media.es2alsayed.com/<real key>` → `200`, `Accept-Ranges: bytes`, **no** `Content-Disposition: attachment`
+- [ ] `https://es2alsayed.com` lists videos, covers load from the media domain
+- [ ] Open a video: it plays, scrubbing works, and it works on iOS Safari
+- [ ] Ask a question: `POST /inference/` returns and the player seeks to the segment
+- [ ] `/videos/<id>?t=90` deep link starts at 1:30
+- [ ] Book PDF renders **inline** in the iframe (needs the custom domain, 5.2)
+- [ ] `docker compose exec web node -e "fetch('https://es2alsayed.com/api/filters').then(r=>console.log(r.status))"` → `200` (SSR path, see 2.3)
+- [ ] Rate limit: 11 rapid `/inference` calls → 429 for that client only
+- [ ] `nmap`/port check from outside: only 22/80/443 open
+- [ ] Backup cron: a dump lands in `es2alsayed-backups`, and a test `pg_restore` of it works
 
 ---
 
-## 9. Cost summary (self-hosted DB + frontend on one VPS)
+## 9. Cost model
 
-| Item | Monthly |
-|---|---|
-| Hetzner CX32 (8 GB) — API + Next + Postgres | ~€7 (~$8) |
-| R2 storage — depends on video size, $0.015/GB, **$0 egress** | e.g. 150 GB → ~$2.25 |
-| R2 Class A/B operations at this traffic | <$0.10 |
-| Cloudflare DNS, Caddy TLS | $0 |
-| **Total** | **~$10/month + storage** |
+**VERIFY every number on the Alibaba pricing pages for your region.** Prices differ by region
+and change often.
 
-Levers: CX22 (4 GB, €4.5) if it holds under load; Vercel free instead of self-hosting Next;
-Neon free tier instead of self-hosted Postgres (adds cold-start latency, 0.5 GB cap, but
-removes backup responsibility).
+| Item | Driver | Notes |
+| --- | --- | --- |
+| ECS (8 GB) + EIP + 40–60 GB ESSD | fixed monthly | The largest fixed cost. Subscription (monthly/yearly) is cheaper than pay-as-you-go. |
+| ECS outbound traffic | HTML/JSON only | Small. |
+| OSS storage | `du -sh` of uploaded media × per-GB-month | Standard class. |
+| **Media egress** | **views × MB watched per view** | **The dominant variable cost.** OSS internet egress is billed per GB. Serving through **Alibaba CDN** (OSS as origin) is usually cheaper per GB than direct OSS egress, and CDN resource plans cut it further. |
+| OSS requests | GET count | Negligible at this scale. |
+| Backups bucket | a few hundred MB × 30 days | Negligible. Internal-endpoint upload is free. |
+| Certificate, DNS | | Free DV cert / basic DNS tier. |
+
+Back-of-envelope for egress: 1,000 views/month × ~150 MB watched ≈ 150 GB/month. Multiply by your
+region's CDN per-GB price. Levers: CDN resource plans, lower-bitrate transcodes (e.g. 480p
+H.264 for talks, which cuts GB watched by 2–4×), and hotlink protection against bandwidth leeching.
 
 ---
 
 ## 10. Open questions / risks
 
-1. **Transcriptions on the drive?** (Section 1) — gates the entire effort. Branch B is a
-   separate GPU transcription project.
-2. **Does a usable DB dump already exist** on the drive? If so, skip Section 4 entirely and
-   go straight to `pg_restore` (Section 5.3) — check `find "$DRIVE" -name "*.dump" -o -name "*.sql"`.
-3. **`MergedChunks.InitialChunkNumber`** is stored in a `vector`-typed column as a
-   stringified list and parsed with `.strip("[]").split(",")` (`InferenceQuery.py:82`).
-   `pg_dump -Fc` / `pg_restore` preserves it; a plain-SQL dump round-trip might not — use the
-   custom format.
-4. **Python 3.11 for ingest** — the 3.14 on this Mac will not install `torch`.
-5. **ffmpeg** not installed — needed by `moviepy` if any `.wav` is regenerated during ingest
-   (`brew install ffmpeg`).
-6. **Model licence / trust_remote_code** — `Qwen/Qwen3-Embedding-0.6B` loads with
-   `trust_remote_code=True`; fine, just note it runs vendor code in the image build.
-7. **Single box = single point of failure.** Acceptable at this budget; the R2 backup cron
-   is the recovery path. Keep the `es2al.dump` from Section 5.3 off-box too.
-8. **`next/font/google`** fetches Geist + IBM Plex Arabic at build time — the build host
-   needs outbound access to Google Fonts (fine on Hetzner and Vercel).
+1. **Transcriptions on the drive?** (Section 1) This gates the whole effort.
+2. **Region choice** (0.1): confirm service availability and pricing before creating resources.
+   Moving later means re-uploading all media.
+3. **Egress cost is uncapped.** Set a **budget alert** in Billing, and consider CDN bandwidth caps /
+   usage alerts, so a viral or scraped video can't produce a surprise bill.
+4. **`MergedChunks.InitialChunkNumber`** is a stringified list in a `vector` column. Use `pg_dump -Fc`
+   (custom format), not a plain-SQL round trip.
+5. **Model licence / `trust_remote_code=True`**: the image build runs vendor code from `Qwen/Qwen3-Embedding-0.6B`.
+6. **Single box = single point of failure.** That's acceptable at this budget. Recovery is the OSS
+   backups plus an ECS snapshot policy. Keep `es2al.dump` off-box too.
+7. **Build-time network:** the API image needs Hugging Face and PyPI (+ the PyTorch CPU index), and
+   the web image needs npm + Google Fonts. All are fine from international regions.

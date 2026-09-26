@@ -104,7 +104,7 @@ def convert_mp4_to_wav(videoPath,wav_path):
         except Exception as e:
             print(f"Error processing {videoPath}: {e}")
 
-def merge_transcribed_chunks(transcribed_path: str, n: int, overlap: int=0):
+def merge_transcribed_chunks(transcribed_path: str, n: int, overlap: int=0, output_root: str=None):
     """
     Merges every n consecutive transcribed chunks (keys) into one chunk,
     breaks early if speakers differ
@@ -112,6 +112,8 @@ def merge_transcribed_chunks(transcribed_path: str, n: int, overlap: int=0):
         transcribed_path: path of transcribed file (JSON format)
         n: Number of consecutive chunks to merge
         overal: number of overlap chunks
+        output_root: if given, write the merged JSON under this dir (one subfolder per
+            video) instead of next to the transcription, e.g. when the media is read-only
     Output:        
         merged: Merged JSON dictionary
     """
@@ -185,7 +187,10 @@ def merge_transcribed_chunks(transcribed_path: str, n: int, overlap: int=0):
     #
     Mainfolder_path = os.path.dirname(transcribed_path)
     Mainfolder_path = os.path.dirname(Mainfolder_path)
-    output_dir = os.path.join(Mainfolder_path,dataFolderName)
+    if output_root:
+        output_dir = os.path.join(output_root, os.path.basename(Mainfolder_path), dataFolderName)
+    else:
+        output_dir = os.path.join(Mainfolder_path,dataFolderName)
     os.makedirs(output_dir, exist_ok=True)
     output_path = os.path.join(output_dir,f"{dataFolderName}.json")
     with open(output_path, "w", encoding="utf-8") as f:
