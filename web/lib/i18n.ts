@@ -50,6 +50,14 @@ const ar = {
     clearFilters: "مسح المرشِّحات",
     noVideos: "لم تُضَف أي فيديوهات إلى المكتبة بعد.",
   },
+  search: {
+    label: "ابحث عن فيديو",
+    placeholder: "ابحث عن فيديو…",
+    submit: "بحث",
+    clear: "مسح البحث",
+    resultsFor: "نتائج البحث عن",
+    noResults: "لا توجد فيديوهات تطابق بحثك.",
+  },
   filters: {
     subject: "المادة",
     allSubjects: "كل المواد",
@@ -125,6 +133,14 @@ const en: Dictionary = {
     noMatches: "No videos match these filters.",
     clearFilters: "Clear filters",
     noVideos: "No videos have been added to the library yet.",
+  },
+  search: {
+    label: "Search for a video",
+    placeholder: "Search for a video…",
+    submit: "Search",
+    clear: "Clear search",
+    resultsFor: "Search results for",
+    noResults: "No videos match your search.",
   },
   filters: {
     subject: "Subject",

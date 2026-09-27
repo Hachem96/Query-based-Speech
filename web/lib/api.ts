@@ -65,7 +65,10 @@ export function listVideos(params: { subject?: string; year?: string } = {}) {
   return getJSON<Video[]>(`/api/videos${suffix}`);
 }
 
-export const getVideo = (id: number | string) => getJSON<Video>(`/api/videos/${id}`);
+export const searchVideos = (q: string) =>
+  getJSON<Video[]>(`/api/videos/search?${new URLSearchParams({ q })}`, { cache: "no-store" });
+
+export const getVideo =(id: number | string) => getJSON<Video>(`/api/videos/${id}`);
 export const listBooks = () => getJSON<Book[]>(`/api/books`);
 export const getBook = (id: number | string) => getJSON<Book>(`/api/books/${id}`);
 export const getFilterOptions = () => getJSON<FilterOptions>(`/api/filters`);

@@ -2,7 +2,9 @@
 Read-only catalog endpoints for the web frontend: videos, books, and the
 available filter options. All file-path columns are returned as ``/media`` URLs.
 """
-from fastapi import APIRouter, HTTPException, Request
+import random
+
+from fastapi import APIRouter, HTTPException, Query, Request
 from backend.api.db import query_all, to_media_url
 from backend.api.limiter import limiter
 
@@ -56,6 +58,17 @@ def list_videos(request: Request, subject: str | None = None, year: int | None =
         params.append(year)
     sql += ' ORDER BY year DESC NULLS LAST, name'
     return [_shape_video(r) for r in query_all(sql, params)]
+
+
+# Placeholder: returns 4-5 random videos regardless of ``q`` until real
+# search is implemented. Must stay above ``/videos/{video_id}``.
+@router.get("/videos/search")
+@limiter.limit("30/minute")
+def search_videos(request: Request, q: str = Query(..., min_length=1, max_length=200)):
+    cols = ", ".join(f'"{c}"' for c in _VIDEO_COLUMNS)
+    limit = random.randint(4, 5)
+    rows = query_all(f'SELECT {cols} FROM "Video" ORDER BY random() LIMIT %s', [limit])
+    return [_shape_video(r) for r in rows]
 
 
 @router.get("/videos/{video_id}")
