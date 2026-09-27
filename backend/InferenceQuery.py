@@ -47,9 +47,9 @@ def inference_query(query,videoName):
         videoId = int(videoId)
 
         # compute the similaritie between the query and merged chunks of video
-        mergedChunkSimilarities = compute_similarities(cursor,videoId, embeddingQuery)
+        mergedChunkSimilarities = compute_similarities(cursor, embeddingQuery,videoId)
 
-        mergedChunkSimilarities["Scores"] = mergedChunkSimilarities["Qwen-0.6B"] #""]
+        mergedChunkSimilarities["Scores"] = mergedChunkSimilarities["Qwen_3_7_1024"] #""]
 
         # sorte the chunks
         mergedChunkSimilarities = mergedChunkSimilarities.sort_values("Scores", ascending=True).reset_index(drop=True)
@@ -141,6 +141,47 @@ def getSegmentTopK(TopKChunks,chunkIndex,oneHole):
     return selectedChunks
 
 
+def search_all_videos(query, k=10):
+    """
+    Search all videos using the embedding of the query.
+
+    For each video, the maximum similarity score among all of its
+    chunks is used as the video's score.
+    """
+
+    embeddingQuery = embed_query(query)
+
+    connection, cursor = connectTodatabase()
+
+    try:
+        # Compute similarity between query and all video chunks
+        mergedChunkSimilarities = compute_similarities(cursor, embeddingQuery)
+
+        # Similarity column
+        mergedChunkSimilarities["Scores"] = (mergedChunkSimilarities["Qwen_3_7_512"])
+
+        videoScores = (
+            mergedChunkSimilarities
+            .groupby("videoId", as_index=False)["Scores"]
+            .max()
+        )
+
+        videoScores = videoScores.sort_values(
+            "Scores",
+            ascending=False
+        )
+
+        # -----------------------------------------------------
+        # Get top-k video IDs
+        # -----------------------------------------------------
+        topVideoIds = (videoScores.head(k)["videoId"].tolist())
+        return topVideoIds
+
+    finally:
+        cursor.close()
+        connection.close()
+
+        
 # def trim_and_show_video(video_path, start_time, end_time):
 #     """
 #     Trim and preview a segment of a video.
@@ -162,14 +203,5 @@ def getSegmentTopK(TopKChunks,chunkIndex,oneHole):
 #     # Close clips to free memory
 #     trimmed.close()
 #     clip.close()
-if __name__ == "__main__":
-    # create_database()
-    videoName = "2005-04-25"
-    videoPath = f"/mnt/d/Personal/PromptSpeech/EvaluationData/{videoName}/{videoName}.mp4"
-    query = "ما هي اهم العوامل التي تجعل من القران معجزة خالدة ودليل على نبوة محمد على مدى التاريخ"
-    output = inference_query(query,videoName)
-    start = int(output["startTimeStamp"])
-    end = int(output["endTimeStamp"])
-    #trim_and_show_video(videoPath,start,end)
-    print(output)
+
     

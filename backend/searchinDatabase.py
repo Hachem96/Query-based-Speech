@@ -2,6 +2,7 @@
 import psycopg2
 import pandas as pd
 import os
+import numpy as np
 def connectTodatabase():
     connection = psycopg2.connect(
         dbname=os.getenv("DB_NAME"),
@@ -31,38 +32,66 @@ def getVideoInfo(cursor,videoName):
         print(f"{videoName} does not exist in database")
 
 
-def compute_similarities(cursor, video_id, queryVectors):
+def compute_similarities(cursor,queryVector,video_id=-1):
     """
-    function computes similarities vectors beween the embedding of chunk
-    and the embeddings of the chunks of one video 
-    we have three embedding models
-    Input
-        cursor
-        video_id
-        queryVectors(3): list of three vectors
-                        the embeddings of query obtained by three models
-    Output:
-        df: dataframe (mergedChunkId, 3 similarites vectors)
+    Compute cosine similarity between a query embedding and
+    embeddings stored in PostgreSQL/pgvector.
+
+    Parameters
+    ----------
+    cursor : psycopg cursor
+        PostgreSQL database cursor.
+    queryVector : np.ndarray
+        Query embedding vector.
+    embeddingColumn : str, default="Qwen_3_7_512"
+        Name of the embedding column in the "Embeddings" table.
+    video_id : int, default=-1
+        If video_id != -1, only chunks belonging to this video
+        are returned.
+        If video_id == -1, chunks from all videos are returned.
+
+    Returns
+    -------
+    pd.DataFrame
+            videoId
+            mergedChunkId
+            <embeddingColumn>
     """
+    embedding_models = {
+        "Qwen_3_7_1024": 1024,
+        # "Qwen_3_7_1536": 1536,
+        # "Qwen_3_7_2560": 2560,
+    }
+    embeddingColumn="Qwen_3_7_1024"
+    if embeddingColumn not in embedding_models:
+        raise ValueError(f"Unknown embedding model: {embeddingColumn}")
 
-    query = '''
-            SELECT
-                "mergedChunkId",
-                ("Qwen-0.6B" <#> %s::vector) AS "Qwen-0.6B"
-            FROM "Embeddings"
-            WHERE "videoId" = %s;
-        '''
+    python_vector = np.asarray(queryVector, dtype=np.float32).tolist()
 
-    
-    
-    python_vector = queryVectors.astype(float).tolist()
-    cursor.execute(query, (python_vector, video_id))
+    query = f'''
+        SELECT
+            "videoId",
+            "mergedChunkId",
+
+            -("{embeddingColumn}" <#> %s::vector)
+                AS "{embeddingColumn}"
+
+        FROM "Embeddings"
+    '''
+
+    params = [python_vector]
+
+   
+    if video_id != -1:
+        query += '''WHERE "videoId" = %s'''
+        params.append(video_id)
+
+    cursor.execute(query, tuple(params))
     rows = cursor.fetchall()
+
     columns = [desc[0] for desc in cursor.description]
 
-    # Convert to DataFrame
-    df = pd.DataFrame(rows, columns=columns)
-    return df
+    return pd.DataFrame(rows, columns=columns)
 
 def get_table_from_db(cursor,Table_Name, list_columns, filter_conditions=None):
     """

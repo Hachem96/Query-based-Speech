@@ -402,7 +402,7 @@ def creat_db_tables():
     embeddingTableInfo = {
         "mergedChunkId": ("INTEGER", "MergedChunks", "id"),
         "videoId": ("INTEGER", "Video", "id"),
-        "Qwen-0.6B": "vector(1024)" 
+        "Qwen_3_7_1024": "vector(1024)" 
     }
     table_name = "Embeddings"
     create_table(table_name,embeddingTableInfo)
