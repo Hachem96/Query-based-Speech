@@ -1,7 +1,7 @@
 from processVideo.common import*
 #from ASR.SpeechTextConversion import transcribe_One_Speech
 import os
-from processVideo.embedding import embed_chunks
+from processVideo.embedding import embed_chunks_API
 from backend.DataBaseFunctions import*
 from pathlib import Path
 import json
@@ -169,7 +169,7 @@ def add_new_video(videoName,year,mp4Path,caption,transcribe=True,correctTranscri
         
         Keys = list(mergedchunkData.keys())
         
-        embeddingQwen = embed_chunks(merged_chunksPath)
+        embeddingQwen = embed_chunks_API(merged_chunksPath)
         
         for i, key in enumerate(Keys):
             chunk = mergedchunkData[key]
