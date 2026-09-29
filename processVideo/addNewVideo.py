@@ -247,5 +247,5 @@ if __name__ == "__main__":
     # add_new_video("25-04-2005","2005",mp4path,caption)
     #evaluationPath = "/mnt/d/Personal/PromptSpeech/EvaluationData"
     # add_VideosOneYear(evaluationPath,transcribe=False)
-    basePath = "/mnt/d/Personal/PromptSpeech/VideosPerYear"
+    basePath = "/Volumes/TOSHIBA EXT/Personal/PromptSpeech/videosPerYear"
     add_all_videos(basePath,transcribe=False,correctTranscription=False, makeSummary=False)
