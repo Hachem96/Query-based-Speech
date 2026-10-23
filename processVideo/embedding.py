@@ -15,7 +15,7 @@ from openai import OpenAI
 #                     "Qwen-0.6B":embedding_QwenModel}
 
 client = OpenAI(api_key=os.getenv("Qwen_API_KEY"),  # Replace with your API Key if you have not configured environment variables
-                base_url=  "https://1274199.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1"
+                base_url=  os.getenv("QWEN_BASE_URL", "https://1274199.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1")
                 )
 model_name = "Qwen_3_7_1024"
 dimension = 1024
