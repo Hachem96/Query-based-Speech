@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import BrandMark from "./BrandMark";
+import ContactLink from "./ContactLink";
 import LanguageToggle from "./LanguageToggle";
 import { useT } from "./locale-provider";
 
@@ -20,7 +21,8 @@ const TABS = [
   },
 ] as const;
 
-export default function SiteHeader() {
+/** `contactHref` comes from the server layout (CONTACT_EMAIL); null hides the button. */
+export default function SiteHeader({ contactHref }: { contactHref: string | null }) {
   const pathname = usePathname() || "/";
   const t = useT();
 
@@ -73,6 +75,7 @@ export default function SiteHeader() {
         </nav>
 
         <div className="ms-auto flex items-center gap-2 sm:ms-0">
+          {contactHref && <ContactLink href={contactHref}>{t.contact.button}</ContactLink>}
           <LanguageToggle />
         </div>
       </div>

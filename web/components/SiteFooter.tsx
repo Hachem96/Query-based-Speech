@@ -1,9 +1,11 @@
 import Link from "next/link";
 import BrandMark from "@/components/BrandMark";
+import { getContactEmail, mailtoHref } from "@/lib/contact";
 import { getT } from "@/lib/i18n-server";
 
 export default async function SiteFooter() {
   const t = await getT();
+  const email = getContactEmail();
 
   return (
     <footer className="dark band-pattern border-t bg-night text-foreground">
@@ -27,6 +29,19 @@ export default async function SiteFooter() {
         </div>
 
         <div className="flex flex-col gap-6 sm:items-end">
+          {email && (
+            <div className="flex flex-col gap-2 sm:items-end">
+              <p className="eyebrow m-0">{t.contact.button}</p>
+              {/* An address is LTR data even inside RTL prose. */}
+              <a
+                href={mailtoHref(email)}
+                dir="ltr"
+                className="text-sm text-foreground transition-colors hover:text-brand"
+              >
+                {email}
+              </a>
+            </div>
+          )}
           <nav aria-label={t.layout.footerNavLabel} className="flex gap-6 text-sm font-semibold">
             <Link href="/" className="text-muted-foreground transition-colors hover:text-brand">
               {t.header.videos}

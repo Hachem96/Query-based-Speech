@@ -1,6 +1,7 @@
 import { Suspense, cache } from "react";
 import Link from "next/link";
 import { InfoIcon } from "lucide-react";
+import ContactLink from "@/components/ContactLink";
 import Filters from "@/components/Filters";
 import PageHero from "@/components/PageHero";
 import VideoCard from "@/components/VideoCard";
@@ -9,6 +10,7 @@ import EmptyState from "@/components/EmptyState";
 import { CardGridSkeleton, FiltersSkeleton, VideoSearchSkeleton } from "@/components/Skeletons";
 import { Button } from "@/components/ui/button";
 import { getFilterOptions, listVideos, searchVideos } from "@/lib/api";
+import { getContactEmail, mailtoHref } from "@/lib/contact";
 import { getT } from "@/lib/i18n-server";
 
 export const dynamic = "force-dynamic";
@@ -88,6 +90,7 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
   const { subject, year, q: rawQ } = await searchParams;
   const q = rawQ?.trim();
   const t = await getT();
+  const contactEmail = getContactEmail();
 
   return (
     <>
@@ -104,6 +107,11 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
             <InfoIcon className="mt-0.5 size-4 shrink-0 text-brand" aria-hidden="true" />
             <p className="m-0">{t.home.aiNote}</p>
           </span>
+          {contactEmail && (
+            <ContactLink href={mailtoHref(contactEmail, t.contact.feedbackSubject)} className="h-7">
+              {t.contact.feedback}
+            </ContactLink>
+          )}
         </div>
       </PageHero>
 

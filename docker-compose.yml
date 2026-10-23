@@ -47,6 +47,9 @@ services:
       args:
         NEXT_PUBLIC_API_BASE: ${NEXT_PUBLIC_API_BASE}
         MEDIA_BASE_URL: ${MEDIA_BASE_URL}
+    environment:
+      # Runtime, not build-time: read per request. Unset hides the contact buttons.
+      CONTACT_EMAIL: ${CONTACT_EMAIL:-}
     depends_on:
       - api
     restart: unless-stopped

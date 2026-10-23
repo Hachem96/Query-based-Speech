@@ -62,6 +62,11 @@ const ar = {
     noResults: "لا توجد فيديوهات تطابق بحثك.",
     opensAtAnswer: "يفتح عند الإجابة",
   },
+  contact: {
+    button: "تواصل معنا",
+    feedback: "أرسل ملاحظاتك",
+    feedbackSubject: "ملاحظات على النص المكتوب",
+  },
   filters: {
     subject: "المادة",
     allSubjects: "كل المواد",
@@ -143,6 +148,11 @@ const en: Dictionary = {
     resultCount: (n: number) => (n === 1 ? "The most relevant video" : `Top ${n} most relevant videos`),
     noResults: "No videos match your search.",
     opensAtAnswer: "Opens at the answer",
+  },
+  contact: {
+    button: "Contact us",
+    feedback: "Send feedback",
+    feedbackSubject: "Transcription feedback",
   },
   filters: {
     subject: "Subject",

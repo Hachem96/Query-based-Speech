@@ -6,6 +6,7 @@ import { LocaleProvider } from "@/components/locale-provider";
 import SiteHeader from "@/components/SiteHeader";
 import SiteFooter from "@/components/SiteFooter";
 import { cn } from "@/lib/utils";
+import { getContactEmail, mailtoHref } from "@/lib/contact";
 import { dirOf, getDictionary } from "@/lib/i18n";
 import { getLocale } from "@/lib/i18n-server";
 import "./globals.css";
@@ -35,6 +36,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const locale = await getLocale();
   const dir = dirOf(locale);
   const t = getDictionary(locale);
+  const contactEmail = getContactEmail();
 
   return (
     <html
@@ -58,7 +60,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               >
                 {t.layout.skipToContent}
               </a>
-              <SiteHeader />
+              <SiteHeader contactHref={contactEmail && mailtoHref(contactEmail)} />
               {/* Full width: each page wraps its own content in `page-container`
                   so its hero band can run edge to edge. */}
               <main id="main" className="flex w-full flex-1 flex-col">

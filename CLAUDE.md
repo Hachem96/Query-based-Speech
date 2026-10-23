@@ -56,7 +56,8 @@ There is **no test suite and no linter/formatter config**. Scripts are driven by
 - **FastAPI CORS**: `FRONTEND_ORIGINS` env var (comma-separated, default `http://localhost:3000`) — the
   Next.js frontend's origin must be listed here.
 - **Next.js frontend** (`web/`) config: `NEXT_PUBLIC_API_BASE` (default `http://localhost:8000`) in
-  `web/.env.local`, read on both server and client.
+  `web/.env.local`, read on both server and client. `CONTACT_EMAIL` (server-only, read per request)
+  drives the "Contact us"/feedback `mailto:` buttons; unset hides them.
 - External API keys via env vars: `API_KEY_DEEPSEEK` (transcription correction, `processVideo/create_pdf.py`),
   `Qwen_API_KEY` / `API_KEY_QWENEMBEDDING` (Qwen embedding API — currently only used by the unused API code
   paths; the active path uses a local model).
