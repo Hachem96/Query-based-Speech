@@ -47,8 +47,9 @@ export function mediaUrl(path: string | null | undefined): string | null {
 
 async function getJSON<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
-    // Catalog data changes rarely; revalidate on the server every 60s.
-    next: { revalidate: 60 },
+    // Catalog data changes rarely; revalidate on the server every 60s —
+    // unless the caller picked its own cache mode (Next rejects both together).
+    ...(init?.cache ? {} : { next: { revalidate: 60 } }),
     ...init,
   });
   if (!res.ok) {
