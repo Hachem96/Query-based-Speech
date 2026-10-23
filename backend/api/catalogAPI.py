@@ -2,11 +2,10 @@
 Read-only catalog endpoints for the web frontend: videos, books, and the
 available filter options. All file-path columns are returned as ``/media`` URLs.
 """
-import random
-
 from fastapi import APIRouter, HTTPException, Query, Request
 from backend.api.db import query_all, to_media_url
 from backend.api.limiter import limiter
+from backend.InferenceQuery import search_all_videos
 
 router = APIRouter()
 
@@ -60,14 +59,17 @@ def list_videos(request: Request, subject: str | None = None, year: int | None =
     return [_shape_video(r) for r in query_all(sql, params)]
 
 
-# Placeholder: returns 4-5 random videos regardless of ``q`` until real
-# search is implemented. Must stay above ``/videos/{video_id}``.
+# Semantic search over transcript embeddings, best match first.
+# Must stay above ``/videos/{video_id}``.
 @router.get("/videos/search")
 @limiter.limit("30/minute")
 def search_videos(request: Request, q: str = Query(..., min_length=1, max_length=200)):
+    video_ids = [int(i) for i in search_all_videos(q)]
+    if not video_ids:
+        return []
     cols = ", ".join(f'"{c}"' for c in _VIDEO_COLUMNS)
-    limit = random.randint(4, 5)
-    rows = query_all(f'SELECT {cols} FROM "Video" ORDER BY random() LIMIT %s', [limit])
+    rows = query_all(f'SELECT {cols} FROM "Video" WHERE id = ANY(%s)', [video_ids])
+    rows.sort(key=lambda r: video_ids.index(r["id"]))
     return [_shape_video(r) for r in rows]
 
 
