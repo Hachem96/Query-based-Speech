@@ -51,8 +51,8 @@ def inference_query(query,videoName):
 
         mergedChunkSimilarities["Scores"] = mergedChunkSimilarities["Qwen_3_7_1024"] #""]
 
-        # sorte the chunks
-        mergedChunkSimilarities = mergedChunkSimilarities.sort_values("Scores", ascending=True).reset_index(drop=True)
+        # sort the chunks (compute_similarities returns the inner product, so higher = more similar)
+        mergedChunkSimilarities = mergedChunkSimilarities.sort_values("Scores", ascending=False).reset_index(drop=True)
         if(len(mergedChunkSimilarities)>topK):
             topMergedChunkIds = mergedChunkSimilarities["mergedChunkId"].iloc[:topK].values
         else:
@@ -158,7 +158,7 @@ def search_all_videos(query, k=10):
         mergedChunkSimilarities = compute_similarities(cursor, embeddingQuery)
 
         # Similarity column
-        mergedChunkSimilarities["Scores"] = (mergedChunkSimilarities["Qwen_3_7_512"])
+        mergedChunkSimilarities["Scores"] = (mergedChunkSimilarities["Qwen_3_7_1024"])
 
         videoScores = (
             mergedChunkSimilarities
