@@ -4,12 +4,17 @@ import { mediaUrl, type Video } from "@/lib/api";
 import { cardClass, cardTitleClass, thumbClass, thumbImageClass } from "@/components/MediaCard";
 import type { Dictionary } from "@/lib/i18n";
 
-export default function VideoCard({ video, t }: { video: Video; t: Dictionary }) {
+/**
+ * `query`: set for library-search results. The link then carries `?q=`, and
+ * the video page asks that question itself and seeks to the answer.
+ */
+export default function VideoCard({ video, t, query }: { video: Video; t: Dictionary; query?: string }) {
   const cover = mediaUrl(video.coverUrl);
   const meta = [video.subject, video.year].filter(Boolean).join(" · ");
+  const href = query ? `/videos/${video.id}?${new URLSearchParams({ q: query })}` : `/videos/${video.id}`;
 
   return (
-    <Link href={`/videos/${video.id}`} className={cardClass}>
+    <Link href={href} className={cardClass}>
       <div className={thumbClass}>
         {cover ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -37,6 +42,12 @@ export default function VideoCard({ video, t }: { video: Video; t: Dictionary })
         <span dir="auto" className="text-[13px] text-muted-foreground tabular-nums text-start">
           {meta || "—"}
         </span>
+        {query && (
+          <span className="mt-0.5 flex items-center gap-1.5 text-[13px] font-semibold text-primary">
+            <PlayIcon className="size-3 fill-current" aria-hidden="true" />
+            {t.search.opensAtAnswer}
+          </span>
+        )}
       </div>
     </Link>
   );

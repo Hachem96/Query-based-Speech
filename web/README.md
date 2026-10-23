@@ -57,7 +57,8 @@ components/
   Filters.tsx           client; pushes filter changes to the URL
   VideoCard.tsx
   VideoWatch.tsx        client; <video> ref, calls /inference, seeks to the result.
-                        Deep link: /videos/1?t=125 starts at 125s.
+                        Deep link: /videos/1?t=125 starts at 125s; /videos/1?q=… asks
+                        that question on load and seeks to the answer (search results).
 lib/api.ts              typed fetch wrappers; mediaUrl() prefixes /media paths with API base
 ```
 

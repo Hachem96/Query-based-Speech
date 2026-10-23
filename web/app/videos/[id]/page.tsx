@@ -9,9 +9,17 @@ import { getT } from "@/lib/i18n-server";
 
 export const dynamic = "force-dynamic";
 
-export default async function VideoPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
+export default async function VideoPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ q?: string }>;
+}) {
+  const [{ id }, { q }] = await Promise.all([params, searchParams]);
   const t = await getT();
+  // Opened from a library search: "back" returns to those results.
+  const backHref = q?.trim() ? `/?${new URLSearchParams({ q: q.trim() })}` : "/";
 
   let video;
   try {
@@ -28,7 +36,7 @@ export default async function VideoPage({ params }: { params: Promise<{ id: stri
   return (
     <>
       <PageHero
-        before={<BackLink href="/">{t.video.back}</BackLink>}
+        before={<BackLink href={backHref}>{t.video.back}</BackLink>}
         eyebrow={meta ? <span className="tabular-nums">{meta}</span> : undefined}
         title={video.name}
         titleDir="auto"

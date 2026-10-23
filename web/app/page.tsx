@@ -74,10 +74,11 @@ async function SearchResults({ q }: { q: string }) {
     );
   }
 
+  // Each result opens its video already seeking to the segment that answers `q`.
   return (
     <div className="grid-cards">
       {videos.map((v) => (
-        <VideoCard key={v.id} video={v} t={t} />
+        <VideoCard key={v.id} video={v} t={t} query={q} />
       ))}
     </div>
   );

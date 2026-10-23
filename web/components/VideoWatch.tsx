@@ -59,17 +59,20 @@ export default function VideoWatch({ video }: { video: Video }) {
   function seekTo(seconds: number) {
     const el = videoRef.current;
     if (!el) return;
-    el.currentTime = seconds;
-    void el.play().catch(() => {});
+    // An auto-asked answer can arrive before the player has its metadata.
+    const go = () => {
+      el.currentTime = seconds;
+      void el.play().catch(() => {});
+    };
+    if (el.readyState >= 1) go();
+    else el.addEventListener("loadedmetadata", go, { once: true });
   }
 
-  async function onAsk(e: React.FormEvent) {
-    e.preventDefault();
-    if (!query.trim()) return;
+  async function ask(question: string) {
     setLoading(true);
     setError(null);
     try {
-      const res = await runInference(video.name, query.trim());
+      const res = await runInference(video.name, question);
       setResult(res);
       seekTo(res.startTimeStamp);
     } catch (err) {
@@ -80,6 +83,25 @@ export default function VideoWatch({ video }: { video: Video }) {
       setLoading(false);
     }
   }
+
+  function onAsk(e: React.FormEvent) {
+    e.preventDefault();
+    if (!query.trim()) return;
+    void ask(query.trim());
+  }
+
+  // Arriving from a library search (/videos/1?q=...): ask that question here
+  // and jump to the answer. The ref keeps dev StrictMode's double effect run
+  // from asking twice.
+  const initialQuery = searchParams.get("q")?.trim() ?? "";
+  const autoAsked = useRef<string | null>(null);
+  useEffect(() => {
+    if (!initialQuery || autoAsked.current === initialQuery) return;
+    autoAsked.current = initialQuery;
+    setQuery(initialQuery);
+    void ask(initialQuery);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialQuery]);
 
   const docs = [
     { label: t.video.transcript, href: mediaUrl(video.transcriptionUrl), Icon: FileTextIcon },

@@ -60,6 +60,7 @@ const ar = {
       return `أكثر ${n} ${form === "few" ? "فيديوهات" : "فيديو"} صلةً ببحثك`;
     },
     noResults: "لا توجد فيديوهات تطابق بحثك.",
+    opensAtAnswer: "يفتح عند الإجابة",
   },
   filters: {
     subject: "المادة",
@@ -141,6 +142,7 @@ const en: Dictionary = {
     resultsFor: "Search results for",
     resultCount: (n: number) => (n === 1 ? "The most relevant video" : `Top ${n} most relevant videos`),
     noResults: "No videos match your search.",
+    opensAtAnswer: "Opens at the answer",
   },
   filters: {
     subject: "Subject",

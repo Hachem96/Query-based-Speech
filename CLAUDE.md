@@ -103,7 +103,8 @@ inline there). The chunk hierarchy is the core idea:
 - **`web/`** — Next.js (App Router, TypeScript, pnpm) frontend, RTL Arabic. Same views as the Dash app but
   **consumes the FastAPI API over HTTP** (`web/lib/api.ts`) — no Python imports. Server components fetch the
   catalog; `web/components/VideoWatch.tsx` (client) calls `POST /inference/` and seeks the `<video>` to the
-  result. Deep link `/videos/{id}?t=SECONDS`. The Dash app is untouched and still runs in parallel.
+  result. Deep links `/videos/{id}?t=SECONDS` and `/videos/{id}?q=QUESTION` (auto-asks on load and
+  seeks — library-search result cards link this way). The Dash app is untouched and still runs in parallel.
 - **`processVideo/`** — ingestion pipeline (`addNewVideo.py`): mp4→wav, generate cover image, transcribe,
   LLM-correct transcript + render PDF, merge chunks, embed, write every stage to the DB. Expects a directory
   layout of `<MainFolder>/<Year>/<VideoName>/<VideoName>.mp4` plus `caption.txt`. `common.py` holds the
