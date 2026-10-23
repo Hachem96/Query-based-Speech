@@ -27,7 +27,7 @@ const arabic = IBM_Plex_Sans_Arabic({
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = getDictionary(await getLocale());
-  return { title: t.meta.title, description: t.meta.description };
+  return { title: t.meta.title, description: t.meta.description, other: { google: "notranslate" } };
 }
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
@@ -41,6 +41,10 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     <html
       lang={locale}
       dir={dir}
+      // Browser auto-translate rewrites text nodes React owns, which crashes
+      // reconciliation ("removeChild ... not a child"). The site has its own
+      // Arabic/English toggle instead.
+      translate="no"
       className={cn("font-sans", geist.variable, arabic.variable)}
       suppressHydrationWarning
     >
