@@ -56,6 +56,13 @@ const ar = {
     submit: "بحث",
     clear: "مسح البحث",
     resultsFor: "نتائج البحث عن",
+    // The Arabic noun form depends on the count: 1, 2 (dual), 3–10 (plural), 11+ (singular).
+    resultCount: (n: number) => {
+      const form = new Intl.PluralRules("ar").select(n);
+      if (form === "one") return "الفيديو الأكثر صلةً ببحثك";
+      if (form === "two") return "أكثر فيديوهين صلةً ببحثك";
+      return `أكثر ${n} ${form === "few" ? "فيديوهات" : "فيديو"} صلةً ببحثك`;
+    },
     noResults: "لا توجد فيديوهات تطابق بحثك.",
   },
   filters: {
@@ -140,6 +147,7 @@ const en: Dictionary = {
     submit: "Search",
     clear: "Clear search",
     resultsFor: "Search results for",
+    resultCount: (n: number) => (n === 1 ? "The most relevant video" : `Top ${n} most relevant videos`),
     noResults: "No videos match your search.",
   },
   filters: {

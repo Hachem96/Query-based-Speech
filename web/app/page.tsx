@@ -1,4 +1,4 @@
-import { Suspense } from "react";
+import { Suspense, cache } from "react";
 import Link from "next/link";
 import { TriangleAlertIcon } from "lucide-react";
 import Filters from "@/components/Filters";
@@ -13,6 +13,9 @@ import { getT } from "@/lib/i18n-server";
 export const dynamic = "force-dynamic";
 
 type SearchParams = Promise<{ subject?: string; year?: string; q?: string }>;
+
+// The result count and the grid share one search request per page render.
+const search = cache(searchVideos);
 
 async function FiltersSection() {
   const options = await getFilterOptions();
@@ -50,8 +53,14 @@ async function VideoGrid({ subject, year }: { subject?: string; year?: string })
   );
 }
 
+async function ResultCount({ q }: { q: string }) {
+  const [videos, t] = await Promise.all([search(q), getT()]);
+  if (videos.length === 0) return null;
+  return <> · {t.search.resultCount(videos.length)}</>;
+}
+
 async function SearchResults({ q }: { q: string }) {
-  const [videos, t] = await Promise.all([searchVideos(q), getT()]);
+  const [videos, t] = await Promise.all([search(q), getT()]);
 
   if (videos.length === 0) {
     return (
@@ -101,6 +110,11 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
         <>
           <p className="mb-4 text-sm text-muted-foreground">
             {t.search.resultsFor} <span dir="auto" className="font-semibold text-foreground">“{q}”</span>
+            <span role="status">
+              <Suspense key={`q:${q}`} fallback={null}>
+                <ResultCount q={q} />
+              </Suspense>
+            </span>
           </p>
           <Suspense key={`q:${q}`} fallback={<CardGridSkeleton count={5} />}>
             <SearchResults q={q} />
