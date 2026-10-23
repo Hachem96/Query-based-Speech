@@ -18,14 +18,16 @@ export default function Error({
   }, [error]);
 
   return (
-    <EmptyState role="alert">
-      <p className="m-0 text-foreground">{t.errors.loadFailed}</p>
-      <p className="m-0 max-w-[48ch] text-sm">
-        {t.errors.loadFailedHint}
-      </p>
-      <Button type="button" onClick={reset}>
-        {t.errors.retry}
-      </Button>
-    </EmptyState>
+    <div className="page-container py-12 sm:py-16">
+      <EmptyState role="alert">
+        <p className="m-0 text-foreground">{t.errors.loadFailed}</p>
+        <p className="m-0 max-w-[48ch] text-sm">
+          {t.errors.loadFailedHint}
+        </p>
+        <Button type="button" onClick={reset}>
+          {t.errors.retry}
+        </Button>
+      </EmptyState>
+    </div>
   );
 }

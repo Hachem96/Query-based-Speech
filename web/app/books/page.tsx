@@ -2,8 +2,9 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { BookOpenIcon } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
+import PageHero from "@/components/PageHero";
 import { CardGridSkeleton } from "@/components/Skeletons";
-import { cardClass } from "@/components/MediaCard";
+import { cardClass, cardTitleClass, thumbClass, thumbImageClass } from "@/components/MediaCard";
 import { listBooks, mediaUrl } from "@/lib/api";
 import { getT } from "@/lib/i18n-server";
 
@@ -28,21 +29,18 @@ async function BookGrid() {
         const meta = [book.author, book.year].filter(Boolean).join(" · ");
         return (
           <Link key={book.id} href={`/books/${book.id}`} className={cardClass}>
-            {cover ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={cover}
-                alt={t.books.coverAlt(title)}
-                loading="lazy"
-                className="aspect-video w-full border-b object-cover"
-              />
-            ) : (
-              <div className="grid aspect-video w-full place-items-center border-b bg-muted text-muted-foreground">
-                <BookOpenIcon className="size-8" aria-hidden="true" />
-              </div>
-            )}
-            <div className="flex flex-1 flex-col gap-1.5 px-4 pt-3.5 pb-4">
-              <h3 dir="auto" className="m-0 text-[15px] leading-snug font-semibold text-start">
+            <div className={thumbClass}>
+              {cover ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={cover} alt={t.books.coverAlt(title)} loading="lazy" className={thumbImageClass} />
+              ) : (
+                <div className="grid size-full place-items-center bg-muted text-muted-foreground">
+                  <BookOpenIcon className="size-8" aria-hidden="true" />
+                </div>
+              )}
+            </div>
+            <div className="flex flex-col gap-1">
+              <h3 dir="auto" className={cardTitleClass}>
                 {title}
               </h3>
               <span dir="auto" className="text-[13px] text-muted-foreground tabular-nums text-start">
@@ -60,10 +58,12 @@ export default async function BooksPage() {
   const t = await getT();
   return (
     <>
-      <h1 className="mb-5 text-2xl font-bold tracking-tight sm:text-3xl">{t.books.title}</h1>
-      <Suspense fallback={<CardGridSkeleton count={6} />}>
-        <BookGrid />
-      </Suspense>
+      <PageHero title={t.books.title} />
+      <div className="page-container py-10 sm:py-14">
+        <Suspense fallback={<CardGridSkeleton count={6} />}>
+          <BookGrid />
+        </Suspense>
+      </div>
     </>
   );
 }

@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { SearchIcon, XIcon } from "lucide-react";
+import { ArrowRightIcon, SearchIcon, XIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useT } from "@/components/locale-provider";
 
@@ -29,16 +29,15 @@ export default function VideoSearch() {
     router.push("/");
   }
 
+  // Lives in the dark home hero: one bordered field with the gold (primary)
+  // submit button inside it; the field shows focus for the input within.
   return (
-    <form role="search" onSubmit={submit} className="mb-6 flex max-w-xl gap-2">
+    <form role="search" onSubmit={submit} className="mt-8 w-full max-w-2xl">
       <label htmlFor={inputId} className="sr-only">
         {t.search.label}
       </label>
-      <div className="relative flex-1">
-        <SearchIcon
-          className="pointer-events-none absolute start-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
-          aria-hidden="true"
-        />
+      <div className="flex items-center gap-2 rounded-lg border border-input bg-night/60 p-1.5 ps-3.5 transition-[border-color,box-shadow] focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/30">
+        <SearchIcon className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
         <input
           id={inputId}
           type="search"
@@ -47,20 +46,24 @@ export default function VideoSearch() {
           onChange={(e) => setValue(e.target.value)}
           placeholder={t.search.placeholder}
           maxLength={200}
-          className="h-9 w-full rounded-md border bg-card ps-9 pe-9 text-sm shadow-xs outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 [&::-webkit-search-cancel-button]:hidden"
+          className="h-10 min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-muted-foreground [&::-webkit-search-cancel-button]:hidden"
         />
         {value && (
           <button
             type="button"
             onClick={clear}
             aria-label={t.search.clear}
-            className="absolute end-2 top-1/2 -translate-y-1/2 rounded-sm p-1 text-muted-foreground hover:text-foreground"
+            className="shrink-0 rounded-sm p-1 text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none"
           >
             <XIcon className="size-4" aria-hidden="true" />
           </button>
         )}
+        <Button type="submit" className="h-10 px-4 font-semibold">
+          {t.search.submit}
+          {/* Drawn for LTR; mirrored so it points forward in RTL too. */}
+          <ArrowRightIcon data-icon="inline-end" className="rtl:-scale-x-100" aria-hidden="true" />
+        </Button>
       </div>
-      <Button type="submit">{t.search.submit}</Button>
     </form>
   );
 }

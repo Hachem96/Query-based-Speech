@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
  */
 export default function BackLink({ href, children }: { href: string; children: React.ReactNode }) {
   return (
-    <Button variant="outline" size="sm" className="mb-4" asChild>
+    <Button variant="outline" size="sm" className="mb-6" asChild>
       <Link href={href}>
         <ArrowLeftIcon data-icon="inline-start" className="rtl:-scale-x-100" aria-hidden="true" />
         {children}

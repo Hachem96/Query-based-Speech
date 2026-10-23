@@ -5,19 +5,28 @@
 @custom-variant dark (&:is(.dark *));
 
 /* ==========================================================================
-   Es2al Sayed — monochrome (black/white) with a blood-red brand accent.
-   shadcn token layout; `--brand` is the one chromatic color in the system.
+   Es2al Sayed — deep petrol blue + gold on cream paper.
+   shadcn token layout; `--brand` is the gold accent. Gold fails contrast as
+   text on cream (≈2.5:1), so in light mode it is only for rules, borders and
+   fills — gold text belongs on the dark bands.
    ========================================================================== */
 
 @theme inline {
   --font-sans:
-    var(--font-geist), var(--font-ibm-plex-arabic), ui-sans-serif, system-ui,
-    "Segoe UI", "Noto Naskh Arabic", sans-serif;
-  --font-heading: var(--font-sans);
+    var(--font-cairo), ui-sans-serif, system-ui, "Segoe UI", "Noto Naskh Arabic", sans-serif;
+  /* Display face for page/section titles; Cairo covers anything it lacks. */
+  --font-heading: var(--font-changa), var(--font-cairo), ui-sans-serif, sans-serif;
 
   --color-brand: var(--brand);
   --color-brand-foreground: var(--brand-foreground);
   --color-brand-muted: var(--brand-muted);
+
+  /* Fixed palette (does not flip with the theme) for the dark bands. */
+  --color-night: #01262f;
+  --color-ink: #01303c;
+  --color-petrol: #004c60;
+  --color-paper: #f7f5f0;
+  --color-gold: #c89600;
 
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
@@ -62,95 +71,126 @@
 }
 
 :root {
-  --radius: 0.375rem;
+  --radius: 0.25rem;
 
-  --background: oklch(0.975 0 0);
-  --foreground: oklch(0.13 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.13 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.13 0 0);
+  --background: #f7f5f0;
+  --foreground: #01303c;
+  --card: #ffffff;
+  --card-foreground: #01303c;
+  --popover: #ffffff;
+  --popover-foreground: #01303c;
 
-  --primary: oklch(0.13 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.94 0 0);
-  --secondary-foreground: oklch(0.2 0 0);
-  --muted: oklch(0.94 0 0);
-  --muted-foreground: oklch(0.5 0 0);
-  --accent: oklch(0.93 0 0);
-  --accent-foreground: oklch(0.13 0 0);
+  --primary: #004c60;
+  --primary-foreground: #f7f5f0;
+  --secondary: #dde4e5;
+  --secondary-foreground: #01303c;
+  --muted: #ebe9e2;
+  --muted-foreground: #3d6b75;
+  --accent: #dde4e5;
+  --accent-foreground: #01303c;
 
-  /* Blood red. */
-  --brand: oklch(0.47 0.19 25);
-  --brand-foreground: oklch(0.985 0 0);
-  --brand-muted: oklch(0.47 0.19 25 / 9%);
+  /* Gold. */
+  --brand: #c89600;
+  --brand-foreground: #01262f;
+  --brand-muted: rgb(200 150 0 / 10%);
   --destructive: oklch(0.5 0.2 25);
 
-  --border: oklch(0.88 0 0);
-  --input: oklch(0.82 0 0);
+  --border: #d6dedd;
+  --input: #c3d2ce;
   --ring: var(--brand);
 
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --chart-1: #c3d2ce;
+  --chart-2: #87a8af;
+  --chart-3: #4a7e88;
+  --chart-4: #004c60;
+  --chart-5: #01303c;
+  --sidebar: #f7f5f0;
+  --sidebar-foreground: #01303c;
+  --sidebar-primary: #004c60;
+  --sidebar-primary-foreground: #f7f5f0;
+  --sidebar-accent: #dde4e5;
+  --sidebar-accent-foreground: #01303c;
+  --sidebar-border: #d6dedd;
+  --sidebar-ring: var(--brand);
 }
 
+/* There is one theme (the :root tokens above). `.dark` is never set on <html>;
+   it scopes these tokens to the dark bands (header, page heroes, ask panel,
+   footer) so components inside them pick up light-on-dark values. */
 .dark {
-  --background: oklch(0.12 0 0);
-  --foreground: oklch(0.96 0 0);
-  --card: oklch(0.17 0 0);
-  --card-foreground: oklch(0.96 0 0);
-  --popover: oklch(0.17 0 0);
-  --popover-foreground: oklch(0.96 0 0);
+  --background: #01262f;
+  --foreground: #f7f5f0;
+  --card: #01303c;
+  --card-foreground: #f7f5f0;
+  --popover: #01303c;
+  --popover-foreground: #f7f5f0;
 
-  --primary: oklch(0.96 0 0);
-  --primary-foreground: oklch(0.13 0 0);
-  --secondary: oklch(0.24 0 0);
-  --secondary-foreground: oklch(0.96 0 0);
-  --muted: oklch(0.22 0 0);
-  --muted-foreground: oklch(0.68 0 0);
-  --accent: oklch(0.25 0 0);
-  --accent-foreground: oklch(0.96 0 0);
+  --primary: #c89600;
+  --primary-foreground: #01262f;
+  --secondary: #0a3d4a;
+  --secondary-foreground: #f7f5f0;
+  --muted: #0a3a46;
+  --muted-foreground: #9fb6ba;
+  --accent: #0b4150;
+  --accent-foreground: #f7f5f0;
 
-  --brand: oklch(0.6 0.21 25);
-  --brand-foreground: oklch(0.1 0 0);
-  --brand-muted: oklch(0.6 0.21 25 / 14%);
-  --destructive: oklch(0.66 0.2 25);
+  --brand: #c89600;
+  --brand-foreground: #01262f;
+  --brand-muted: rgb(200 150 0 / 14%);
+  --destructive: oklch(0.68 0.18 25);
 
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 16%);
+  --border: rgb(247 245 240 / 12%);
+  --input: rgb(247 245 240 / 18%);
   --ring: var(--brand);
 
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.96 0 0);
-  --sidebar-primary-foreground: oklch(0.13 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --chart-1: #c3d2ce;
+  --chart-2: #87a8af;
+  --chart-3: #4a7e88;
+  --chart-4: #c89600;
+  --chart-5: #f7f5f0;
+  --sidebar: #01303c;
+  --sidebar-foreground: #f7f5f0;
+  --sidebar-primary: #c89600;
+  --sidebar-primary-foreground: #01262f;
+  --sidebar-accent: #0b4150;
+  --sidebar-accent-foreground: #f7f5f0;
+  --sidebar-border: rgb(247 245 240 / 12%);
+  --sidebar-ring: var(--brand);
+}
+
+/* Page-width wrapper; pages own it so bands can run full-bleed. */
+@utility page-container {
+  margin-inline: auto;
+  width: 100%;
+  max-width: var(--container-6xl);
+  padding-inline: 1.25rem;
+}
+
+/* Faint eight-point-star texture for the dark bands. */
+@utility band-pattern {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='56' viewBox='0 0 56 56'%3E%3Cg fill='none' stroke='%23f7f5f0' stroke-opacity='.045'%3E%3Crect x='20' y='20' width='16' height='16'/%3E%3Crect x='20' y='20' width='16' height='16' transform='rotate(45 28 28)'/%3E%3C/g%3E%3C/svg%3E");
+  background-position: center top;
+}
+
+/* Small label above a title. Tracked only in Latin — letter-spacing breaks
+   the joins of Arabic script. */
+@utility eyebrow {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--muted-foreground);
+  &:lang(en) {
+    letter-spacing: 0.08em;
+  }
+  .dark & {
+    color: var(--brand);
+  }
 }
 
 /* Catalog grid (videos + books). */
 @utility grid-cards {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(258px, 1fr));
-  gap: 1.125rem;
+  gap: 2rem 1.5rem;
 }
 
 /* Player + side panel; stacks under 900px. */
@@ -177,6 +217,10 @@
   button:not(:disabled),
   [role="button"]:not(:disabled) {
     cursor: pointer;
+  }
+  h1,
+  h2 {
+    @apply font-heading;
   }
   h1,
   h2,

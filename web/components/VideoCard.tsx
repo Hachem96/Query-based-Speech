@@ -1,7 +1,7 @@
 import Link from "next/link";
-import { VideoIcon } from "lucide-react";
+import { PlayIcon, VideoIcon } from "lucide-react";
 import { mediaUrl, type Video } from "@/lib/api";
-import { cardClass } from "@/components/MediaCard";
+import { cardClass, cardTitleClass, thumbClass, thumbImageClass } from "@/components/MediaCard";
 import type { Dictionary } from "@/lib/i18n";
 
 export default function VideoCard({ video, t }: { video: Video; t: Dictionary }) {
@@ -10,22 +10,28 @@ export default function VideoCard({ video, t }: { video: Video; t: Dictionary })
 
   return (
     <Link href={`/videos/${video.id}`} className={cardClass}>
-      {cover ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={cover}
-          alt={t.video.coverAlt(video.name)}
-          loading="lazy"
-          className="aspect-video w-full border-b object-cover"
-        />
-      ) : (
-        <div className="grid aspect-video w-full place-items-center border-b bg-muted text-muted-foreground">
-          <VideoIcon className="size-8" aria-hidden="true" />
-        </div>
-      )}
-      <div className="flex flex-1 flex-col gap-1.5 px-4 pt-3.5 pb-4">
+      <div className={thumbClass}>
+        {cover ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={cover} alt={t.video.coverAlt(video.name)} loading="lazy" className={thumbImageClass} />
+        ) : (
+          <div className="grid size-full place-items-center bg-muted text-muted-foreground">
+            <VideoIcon className="size-8" aria-hidden="true" />
+          </div>
+        )}
+        {/* Play badge on hover. Media glyphs are never mirrored, even in RTL. */}
+        <span
+          aria-hidden="true"
+          className="absolute inset-0 grid place-items-center bg-ink/0 transition-colors duration-200 group-hover:bg-ink/10"
+        >
+          <span className="grid size-12 scale-90 place-items-center rounded-full border border-gold bg-ink/80 text-gold opacity-0 transition duration-200 group-hover:scale-100 group-hover:opacity-100 motion-reduce:transition-none">
+            <PlayIcon className="size-5 translate-x-px fill-current" />
+          </span>
+        </span>
+      </div>
+      <div className="flex flex-col gap-1">
         {/* Titles may be Arabic, Latin, or mixed — dir="auto" picks per title. */}
-        <h3 dir="auto" className="m-0 text-[15px] leading-snug font-semibold text-start">
+        <h3 dir="auto" className={cardTitleClass}>
           {video.name}
         </h3>
         <span dir="auto" className="text-[13px] text-muted-foreground tabular-nums text-start">

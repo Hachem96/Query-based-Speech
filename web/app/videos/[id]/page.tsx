@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import BackLink from "@/components/BackLink";
+import PageHero from "@/components/PageHero";
 import VideoWatch from "@/components/VideoWatch";
 import { WatchSkeleton } from "@/components/Skeletons";
 import { getVideo } from "@/lib/api";
@@ -26,16 +27,17 @@ export default async function VideoPage({ params }: { params: Promise<{ id: stri
 
   return (
     <>
-      <BackLink href="/">{t.video.back}</BackLink>
-      <h1 dir="auto" className="mb-1 text-2xl font-bold tracking-tight text-start sm:text-3xl">
-        {video.name}
-      </h1>
-      <p dir="auto" className="mb-5 text-sm text-muted-foreground tabular-nums text-start">
-        {meta || "—"}
-      </p>
-      <Suspense fallback={<WatchSkeleton />}>
-        <VideoWatch video={video} />
-      </Suspense>
+      <PageHero
+        before={<BackLink href="/">{t.video.back}</BackLink>}
+        eyebrow={meta ? <span className="tabular-nums">{meta}</span> : undefined}
+        title={video.name}
+        titleDir="auto"
+      />
+      <div className="page-container py-10 sm:py-14">
+        <Suspense fallback={<WatchSkeleton />}>
+          <VideoWatch video={video} />
+        </Suspense>
+      </div>
     </>
   );
 }

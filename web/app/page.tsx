@@ -1,11 +1,12 @@
 import { Suspense, cache } from "react";
 import Link from "next/link";
-import { TriangleAlertIcon } from "lucide-react";
+import { InfoIcon } from "lucide-react";
 import Filters from "@/components/Filters";
+import PageHero from "@/components/PageHero";
 import VideoCard from "@/components/VideoCard";
 import VideoSearch from "@/components/VideoSearch";
 import EmptyState from "@/components/EmptyState";
-import { CardGridSkeleton, FiltersSkeleton } from "@/components/Skeletons";
+import { CardGridSkeleton, FiltersSkeleton, VideoSearchSkeleton } from "@/components/Skeletons";
 import { Button } from "@/components/ui/button";
 import { getFilterOptions, listVideos, searchVideos } from "@/lib/api";
 import { getT } from "@/lib/i18n-server";
@@ -89,48 +90,49 @@ export default async function HomePage({ searchParams }: { searchParams: SearchP
 
   return (
     <>
-      <h1 className="mb-2 text-2xl font-bold tracking-tight sm:text-3xl">{t.home.title}</h1>
-      <p className="mb-6 max-w-[62ch] text-muted-foreground">
-        {t.home.lead}
-      </p>
+      <PageHero align="center" title={t.home.title} lead={t.home.lead}>
+        <Suspense fallback={<VideoSearchSkeleton />}>
+          <VideoSearch />
+        </Suspense>
 
-      <div
-        role="note"
-        className="mb-6 flex gap-3 rounded-md border-s-[3px] border-brand bg-brand-muted px-4 py-3 text-[13px]"
-      >
-        <TriangleAlertIcon className="mt-0.5 size-4 shrink-0 text-brand" aria-hidden="true" />
-        <p className="m-0">{t.home.aiNote}</p>
+        <div
+          role="note"
+          className="mt-5 flex max-w-2xl flex-wrap items-center justify-center gap-x-4 gap-y-2.5 text-[13px] text-muted-foreground"
+        >
+          <span className="flex gap-2.5 text-start">
+            <InfoIcon className="mt-0.5 size-4 shrink-0 text-brand" aria-hidden="true" />
+            <p className="m-0">{t.home.aiNote}</p>
+          </span>
+        </div>
+      </PageHero>
+
+      <div className="page-container py-10 sm:py-14">
+        {q ? (
+          <>
+            <p className="mb-6 text-sm text-muted-foreground">
+              {t.search.resultsFor} <span dir="auto" className="font-semibold text-foreground">“{q}”</span>
+              <span role="status">
+                <Suspense key={`q:${q}`} fallback={null}>
+                  <ResultCount q={q} />
+                </Suspense>
+              </span>
+            </p>
+            <Suspense key={`q:${q}`} fallback={<CardGridSkeleton count={5} />}>
+              <SearchResults q={q} />
+            </Suspense>
+          </>
+        ) : (
+          <>
+            <Suspense fallback={<FiltersSkeleton />}>
+              <FiltersSection />
+            </Suspense>
+
+            <Suspense key={`${subject ?? ""}|${year ?? ""}`} fallback={<CardGridSkeleton />}>
+              <VideoGrid subject={subject} year={year} />
+            </Suspense>
+          </>
+        )}
       </div>
-
-      <Suspense fallback={null}>
-        <VideoSearch />
-      </Suspense>
-
-      {q ? (
-        <>
-          <p className="mb-4 text-sm text-muted-foreground">
-            {t.search.resultsFor} <span dir="auto" className="font-semibold text-foreground">“{q}”</span>
-            <span role="status">
-              <Suspense key={`q:${q}`} fallback={null}>
-                <ResultCount q={q} />
-              </Suspense>
-            </span>
-          </p>
-          <Suspense key={`q:${q}`} fallback={<CardGridSkeleton count={5} />}>
-            <SearchResults q={q} />
-          </Suspense>
-        </>
-      ) : (
-        <>
-          <Suspense fallback={<FiltersSkeleton />}>
-            <FiltersSection />
-          </Suspense>
-
-          <Suspense key={`${subject ?? ""}|${year ?? ""}`} fallback={<CardGridSkeleton />}>
-            <VideoGrid subject={subject} year={year} />
-          </Suspense>
-        </>
-      )}
     </>
   );
 }

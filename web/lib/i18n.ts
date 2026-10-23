@@ -25,17 +25,13 @@ const ar = {
   layout: {
     skipToContent: "تخطَّ إلى المحتوى",
     footer: "إسأل سيد — منصة تعلّم تفاعلية للمحاضرات العربية.",
+    footerNavLabel: "روابط التذييل",
   },
   header: {
     homeLabel: "إسأل سيد — الصفحة الرئيسية",
     navLabel: "التنقل الرئيسي",
     videos: "الفيديوهات",
     books: "الكتب",
-  },
-  theme: {
-    groupLabel: "سمة العرض",
-    light: "فاتح",
-    dark: "داكن",
   },
   language: {
     // Label names the language you switch *to*, written in that language.
@@ -117,17 +113,13 @@ const en: Dictionary = {
   layout: {
     skipToContent: "Skip to content",
     footer: "Es2al Sayed — an interactive learning platform for Arabic lectures.",
+    footerNavLabel: "Footer links",
   },
   header: {
     homeLabel: "Es2al Sayed — Home",
     navLabel: "Main navigation",
     videos: "Videos",
     books: "Books",
-  },
-  theme: {
-    groupLabel: "Color theme",
-    light: "Light",
-    dark: "Dark",
   },
   language: {
     switchTo: "العربية",
