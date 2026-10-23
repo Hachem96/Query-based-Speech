@@ -47,10 +47,12 @@ def add_new_video(videoName,year,mp4Path,caption,transcribe=True,correctTranscri
         if not os.path.exists(mp3Path):
             convert_mp4_to_wav(mp4Path,mp3Path)
         
-        # create cover image for video using caption
-        cover_path =os.path.join(parent_dir, "cover.png")
-        #if not os.path.exists(cover_path):
-        text_file_to_image(cover_path, caption,font_size=38)
+        # use the pre-rendered caption.png as the cover; only generate cover.png when it is missing
+        if os.path.exists(os.path.join(parent_dir, "caption.png")):
+            coverFileName = "caption.png"
+        else:
+            coverFileName = "cover.png"
+            text_file_to_image(os.path.join(parent_dir, coverFileName), caption,font_size=38)
         
         # transcruption
         if(transcribe):
@@ -97,7 +99,7 @@ def add_new_video(videoName,year,mp4Path,caption,transcribe=True,correctTranscri
         yearVolderName = Path(parent_dir).parent.name
         mainFolderName = Path(parent_dir).parent.parent.name
 
-        urlCover = f"{mainFolderName}/{yearVolderName}/{videoName}/cover.png"
+        urlCover = f"{mainFolderName}/{yearVolderName}/{videoName}/{coverFileName}"
         urlMP4 = f"{mainFolderName}/{yearVolderName}/{videoName}/{videoName}.mp4"
         urlMP3 = f"{mainFolderName}/{yearVolderName}/{videoName}/{videoName}.wav"
        
