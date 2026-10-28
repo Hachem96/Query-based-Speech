@@ -264,26 +264,30 @@ No vector index is needed: `compute_similarities` scans only one video's rows (a
 
 ### 5.3 — Upload media from the drive
 
-Use Alibaba's **`ossutil`** CLI (install it from the OSS docs, then run `ossutil config` with
-the RAM AccessKey and the region endpoint `oss-<region>.aliyuncs.com`; see `ENV_VARS.md` §4).
-Upload only what the app serves: mp4, covers and PDFs.
+Use `processVideo/uploadToOSS.py` (`pip install oss2`; credentials and endpoint come from the
+`OSS_*` env vars in `ENV_VARS.md` §4). It uploads the whole tree **except** the derived files:
+`<VideoName>.wav`, the `AudioSegments_*` folders, the `jinaV3` / `omarelshehy` / `Qwen-0.6B`
+embedding `.npy` files, and macOS `.DS_Store` / `._*` files. The rules are constants at the top of the
+script. Start with a dry run. It needs no credentials and prints what is excluded, the per-extension
+upload totals, and the first few object keys:
 
 ```bash
-DRIVE="/Volumes/TOSHIBA EXT/Personal/PromptSpeech"
-ossutil cp -r "$DRIVE/" oss://es2alsayed-media/PromptSpeech/ \
-  --include "*.mp4" --include "cover.png" --include "*.pdf" \
-  --update        # skip objects already uploaded, so an interrupted run can be resumed
+SRC="/Volumes/TOSHIBA EXT/Personal/PromptSpeech/videosPerYear"
+python -m processVideo.uploadToOSS --source "$SRC" --dry-run
+python -m processVideo.uploadToOSS --source "$SRC"
 ```
 
-`ossutil` 1.x and 2.x differ slightly in flag names, so check `ossutil help cp` for your version.
-Uploading hundreds of GB from a home connection takes a long time. Run it inside `tmux`/`screen`
-and rerun it with `--update` if it drops.
+Uploading hundreds of GB from a home connection takes a long time. Run it inside `tmux`/`screen`.
+If it drops, rerun the same command: objects already uploaded at the same size are skipped, and an
+interrupted large mp4 resumes from its last part.
 
 **Key alignment:** each object key must equal the DB path after `to_media_url()` strips
-`MAIN_MEDIA_PATH`. The command above produces keys like
-`PromptSpeech/2005/2005-04-25/2005-04-25.mp4`. Run `SELECT "linkToMP4" FROM "Video" LIMIT 1;`,
-and set `MAIN_MEDIA_PATH` in production to whatever comes **before** `PromptSpeech/` in that
-value (empty if the DB value already starts with `PromptSpeech/`). **Verify one URL by hand:**
+`MAIN_MEDIA_PATH`. The script builds keys as `<--source folder name>/<Year>/<Video>/<file>`, e.g.
+`videosPerYear/2005/2005-04-25/2005-04-25.mp4`. That is the format `addNewVideo.py` writes when its
+basePath ends in `videosPerYear`. Compare the dry run's keys with
+`SELECT "linkToMP4" FROM "Video" LIMIT 1;`. If they differ, use `--prefix` to match the DB value, or set
+`MAIN_MEDIA_PATH` in production to whatever comes **before** the key in that value. **Verify one URL
+by hand:**
 
 ```bash
 # take a real linkToMP4 from the DB → build the URL the API would return → then:

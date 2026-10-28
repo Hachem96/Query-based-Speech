@@ -21,6 +21,9 @@ python -m backend.DataBaseFunctions
 # Ingest videos into the DB (edit the __main__ block for paths first)
 python -m processVideo.addNewVideo
 
+# Upload the video tree to Alibaba OSS, minus wav/AudioSegments/unused .npy (needs `oss2`, OSS_* env vars)
+python -m processVideo.uploadToOSS --source "<drive>/videosPerYear" --dry-run
+
 # REST API (FastAPI): /inference, /table, /api/* (catalog), /media/* (files)
 uvicorn backend.api.main:app --host 0.0.0.0 --port 8000
 
