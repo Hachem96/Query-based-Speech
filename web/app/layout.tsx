@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Cairo, Changa } from "next/font/google";
 import { DirectionProvider } from "@/components/ui/direction";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import AnnouncementBar from "@/components/AnnouncementBar";
 import { LocaleProvider } from "@/components/locale-provider";
 import SiteHeader from "@/components/SiteHeader";
 import SiteFooter from "@/components/SiteFooter";
@@ -61,6 +62,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 {t.layout.skipToContent}
               </a>
               <SiteHeader contactHref={contactEmail && mailtoHref(contactEmail)} />
+              <AnnouncementBar />
               {/* Full width: each page wraps its own content in `page-container`
                   so its hero band can run edge to edge. */}
               <main id="main" className="flex w-full flex-1 flex-col">

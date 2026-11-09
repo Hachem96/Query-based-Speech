@@ -26,6 +26,7 @@ const ar = {
     skipToContent: "تخطَّ إلى المحتوى",
     footer: "إسأل سيد — منصة تعلّم تفاعلية للمحاضرات العربية.",
     footerNavLabel: "روابط التذييل",
+    announcement: "نعمل على إضافة المزيد من الفيديوهات والكتب والتحديثات في الفترة القادمة.",
   },
   header: {
     homeLabel: "إسأل سيد — الصفحة الرئيسية",
@@ -120,6 +121,7 @@ const en: Dictionary = {
     skipToContent: "Skip to content",
     footer: "Es2al Sayed — an interactive learning platform for Arabic lectures.",
     footerNavLabel: "Footer links",
+    announcement: "We're working on adding more videos, books, and updates in the future.",
   },
   header: {
     homeLabel: "Es2al Sayed — Home",
